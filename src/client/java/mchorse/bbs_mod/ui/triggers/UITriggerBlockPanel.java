@@ -131,14 +131,14 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
             }
         });
 
-        this.left_click = new UIButton(UIKeys.TRIGGER_LEFT_CLICK, (b) -> this.createOverlay(this.triggerBlock.left_click));
-        this.right_click = new UIButton(UIKeys.TRIGGER_RIGHT_CLICK, (b) -> this.createOverlay(this.triggerBlock.right_click));
-        this.enter = new UIButton(UIKeys.ON_ENTER, (b) -> this.createOverlay(this.triggerBlock.enter));
-        this.exit = new UIButton(UIKeys.ON_EXIT, (b) -> this.createOverlay(this.triggerBlock.exit));
-        this.whileIn = new UIButton(UIKeys.WHILE_IN, (b) -> this.createOverlay(this.triggerBlock.whileIn));
+        this.left_click = new UIButton(UIKeys.TRIGGER_LEFT_CLICK, (b) -> { if (this.triggerBlock != null) this.createOverlay(this.triggerBlock.left_click); });
+        this.right_click = new UIButton(UIKeys.TRIGGER_RIGHT_CLICK, (b) -> { if (this.triggerBlock != null) this.createOverlay(this.triggerBlock.right_click); });
+        this.enter = new UIButton(UIKeys.ON_ENTER, (b) -> { if (this.triggerBlock != null) this.createOverlay(this.triggerBlock.enter); });
+        this.exit = new UIButton(UIKeys.ON_EXIT, (b) -> { if (this.triggerBlock != null) this.createOverlay(this.triggerBlock.exit); });
+        this.whileIn = new UIButton(UIKeys.WHILE_IN, (b) -> { if (this.triggerBlock != null) this.createOverlay(this.triggerBlock.whileIn); });
+        this.entityType = new UIButton(UIKeys.ENTITY_TYPE_0, (b) -> { if (this.triggerBlock != null) this.setEntityType(this.triggerBlock); });
         this.regionDelay = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionDelay.set(v.intValue()); this.save(); } }).limit(0, 1000).integer();
         this.regionDelay.tooltip(UIKeys.REGION_DELAY);
-        this.entityType = new UIButton(UIKeys.ENTITY_TYPE_0, (b) -> this.setEntityType(this.triggerBlock));
         this.typeLabel = UI.label(UIKeys.ENTITY_TITLE);
 
         this.transform = new UIPropTransform();
@@ -449,7 +449,12 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
 
     private void updateButtons()
     {
-        boolean region = this.region.getValue();
+
+        boolean hasEntity = this.triggerBlock != null;
+        boolean region = hasEntity && this.region.getValue();
+
+        this.left_click.setEnabled(hasEntity);
+        this.right_click.setEnabled(hasEntity);
 
         this.entityType.setEnabled(region);
         this.enter.setEnabled(region);
@@ -480,6 +485,7 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
     public void setEntity(TriggerBlockEntity entity)
     {
         this.triggerBlock = entity;
+        this.updateButtons();
 
         if (entity != null)
         {
