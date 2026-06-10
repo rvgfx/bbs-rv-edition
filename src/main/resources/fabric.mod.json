@@ -2,11 +2,12 @@
     "schemaVersion": 1,
     "id": "bbs",
     "version": "${version}",
-    "name": "BBS FS mod",
+    "name": "BBS RV Edition",
     "description": "A new generation of video production mod",
     "authors": [
         "McHorse",
-        "Wemppy"
+        "Wemppy",
+        "RvGF"
     ],
     "contributors": [
         "Chryfi (tracker clip)",
@@ -26,7 +27,8 @@
         "Rüyaperest (Turkish translations)",
         "Kirkus (Ukrainian translations)",
         "Eleeter (Urdu translations)",
-        "Diobede (Vietnamese translations)"
+        "Diobede (Vietnamese translations)",
+        "BBS CML Edition (Triggers system, ported and adapted)"
     ],
     "contact": {
         "homepage": "https://www.patreon.com/McHorse"

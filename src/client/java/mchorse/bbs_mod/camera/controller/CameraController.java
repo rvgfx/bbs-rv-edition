@@ -144,6 +144,7 @@ public class CameraController implements ICameraController
 
     public void reset()
     {
+        this.controllers.clear();
         this.current = null;
     }
 }
