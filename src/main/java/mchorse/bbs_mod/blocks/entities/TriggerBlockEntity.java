@@ -188,7 +188,7 @@ public class TriggerBlockEntity extends BlockEntity
                     {
                         // Substitute entity placeholders
                         cmd = cmd
-                                .replace("%player%", entity.getNameForScoreboard())
+                                .replace("%player%", entity.getEntityName())
                                 .replace("%uuid%", entity.getUuidAsString())
                                 .replace("%x%", String.valueOf(entity.getBlockPos().getX()))
                                 .replace("%y%", String.valueOf(entity.getBlockPos().getY()))
