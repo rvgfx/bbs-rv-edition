@@ -4,12 +4,15 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.blocks.TriggerBlock;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
+import mchorse.bbs_mod.blocks.entities.TriggerBlockEntity;
 import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.events.TriggerBlockEntityUpdateCallback;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
@@ -59,6 +62,7 @@ public class BBSRendering
      * Cached rendered model blocks
      */
     public static final Set<ModelBlockEntity> capturedModelBlocks = new HashSet<>();
+    public static final Set<TriggerBlockEntity> capturedTriggerBlocks = new HashSet<>();
 
     public static boolean canRender;
 
@@ -186,6 +190,7 @@ public class BBSRendering
     public static void startTick()
     {
         capturedModelBlocks.clear();
+        capturedTriggerBlocks.clear();
     }
 
     public static void setup()
@@ -199,6 +204,14 @@ public class BBSRendering
             if (entity.getWorld().isClient())
             {
                 capturedModelBlocks.add(entity);
+            }
+        });
+
+        TriggerBlockEntityUpdateCallback.EVENT.register((entity) ->
+        {
+            if (entity.getWorld().isClient())
+            {
+                capturedTriggerBlocks.add(entity);
             }
         });
 

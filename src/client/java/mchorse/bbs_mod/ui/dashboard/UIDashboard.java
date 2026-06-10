@@ -32,7 +32,9 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.model_blocks.UIModelBlockPanel;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.ui.particles.UIParticleSchemePanel;
+import mchorse.bbs_mod.ui.playback_button.UIPlaybackPanel;
 import mchorse.bbs_mod.ui.selectors.UISelectorsOverlayPanel;
+import mchorse.bbs_mod.ui.triggers.UITriggerBlockPanel;
 import mchorse.bbs_mod.ui.utility.UIUtilityOverlayPanel;
 import mchorse.bbs_mod.ui.utility.audio.UIAudioEditorPanel;
 import mchorse.bbs_mod.ui.utils.UIChalkboard;
@@ -56,6 +58,7 @@ public class UIDashboard extends UIBaseMenu
 
     public UIIcon settings;
     public UIIcon selectors;
+    public UIIcon playbackIcon;
 
     /* Camera data */
     public final UIOrbitCamera orbitUI = new UIOrbitCamera();
@@ -150,8 +153,8 @@ public class UIDashboard extends UIBaseMenu
         if (BBSRendering.isOptifinePresent())
         {
             UIOverlay.addOverlay(this.context, new UIMessageOverlayPanel(
-                UIKeys.DASHBOARD_OPTIFINE_EW_TITLE,
-                UIKeys.DASHBOARD_OPTIFINE_EW_DESCRIPTION
+                    UIKeys.DASHBOARD_OPTIFINE_EW_TITLE,
+                    UIKeys.DASHBOARD_OPTIFINE_EW_DESCRIPTION
             ));
         }
     }
@@ -249,6 +252,9 @@ public class UIDashboard extends UIBaseMenu
         this.panels.registerPanel(new UIMorphingPanel(this), UIKeys.MORPHING_TITLE, Icons.MORPH);
         this.panels.registerPanel(new UIFilmPanel(this), UIKeys.FILM_TITLE, Icons.FILM);
         this.panels.registerPanel(new UIModelBlockPanel(this), UIKeys.MODEL_BLOCKS_TITLE, Icons.BLOCK);
+        this.panels.registerPanel(new UITriggerBlockPanel(this), UIKeys.TRIGGER_BLOCK_TITLE, Icons.BLOCK);
+        this.playbackIcon = this.panels.registerPanel(new UIPlaybackPanel(this), IKey.raw("Playback Button"), Icons.PLAY);
+        this.playbackIcon.setVisible(false);
         this.panels.registerPanel(new UIParticleSchemePanel(this), UIKeys.PANELS_PARTICLES, Icons.PARTICLE).marginLeft(10);
         this.panels.registerPanel(new UITextureManagerPanel(this), UIKeys.TEXTURES_TOOLTIP, Icons.MATERIAL);
         this.panels.registerPanel(new UIAudioEditorPanel(this), UIKeys.AUDIO_TITLE, Icons.SOUND);
@@ -280,6 +286,23 @@ public class UIDashboard extends UIBaseMenu
         if (this.panels.panel != null)
         {
             this.panels.panel.update();
+        }
+
+        if (this.playbackIcon != null)
+        {
+            net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+
+            if (mc.player != null)
+            {
+                boolean hasItem = mc.player.getMainHandStack().getItem() instanceof mchorse.bbs_mod.items.playback.PlaybackItem
+                        || mc.player.getOffHandStack().getItem() instanceof mchorse.bbs_mod.items.playback.PlaybackItem;
+
+                this.playbackIcon.setVisible(hasItem);
+                if (!hasItem && this.panels.panel instanceof UIPlaybackPanel)
+                {
+                    this.setPanel(this.getPanel(mchorse.bbs_mod.ui.film.UIFilmPanel.class));
+                }
+            }
         }
     }
 

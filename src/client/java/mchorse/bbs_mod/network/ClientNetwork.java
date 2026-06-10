@@ -4,6 +4,7 @@ import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
+import mchorse.bbs_mod.blocks.entities.TriggerBlockEntity;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -24,6 +25,8 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.model_blocks.UIModelBlockPanel;
 import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
+import mchorse.bbs_mod.ui.playback_button.UIPlaybackPanel;
+import mchorse.bbs_mod.ui.triggers.UITriggerBlockPanel;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -83,6 +86,28 @@ public class ClientNetwork
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_SELECTED_SLOT, (client, handler, buf, responseSender) -> handleSelectedSlotPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER, (client, handler, buf, responseSender) -> handleAnimationStateModelBlockPacket(client, buf));
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_REFRESH_MODEL_BLOCKS, (client, handler, buf, responseSender) -> handleRefreshModelBlocksPacket(client, buf));
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_CLICKED_TRIGGER_BLOCK_PACKET, (client, handler, buf, responseSender) -> handleClientTriggerBlockPacket(client, buf));
+        // Recebe o packet do servidor e abre o painel
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_OPEN_PLAYBACK_PANEL, (client, handler, buf, responseSender) ->
+        {
+            String currentFilm = buf.readString(32767);
+
+            client.execute(() ->
+            {
+                UIBaseMenu menu = UIScreen.getCurrentMenu();
+                UIDashboard dashboard = BBSModClient.getDashboard();
+
+                if (menu != dashboard)
+                {
+                    UIScreen.open(dashboard);
+                }
+
+                UIPlaybackPanel panel = dashboard.getPanels().getPanel(UIPlaybackPanel.class);
+
+                dashboard.setPanel(panel);
+                panel.fillCurrentFilm(currentFilm);
+            });
+        });
     }
 
     /* Handlers */
@@ -112,6 +137,33 @@ public class ClientNetwork
 
             dashboard.setPanel(panel);
             panel.fill((ModelBlockEntity) entity, true);
+        });
+    }
+
+    private static void handleClientTriggerBlockPacket(MinecraftClient client, PacketByteBuf buf) {
+        BlockPos pos = buf.readBlockPos();
+
+        client.execute(() ->
+        {
+            BlockEntity entity = client.world.getBlockEntity(pos);
+
+            if (!(entity instanceof TriggerBlockEntity))
+            {
+                return;
+            }
+
+            UIBaseMenu menu = UIScreen.getCurrentMenu();
+            UIDashboard dashboard = BBSModClient.getDashboard();
+
+            if (menu != dashboard)
+            {
+                UIScreen.open(dashboard);
+            }
+
+            UITriggerBlockPanel panel = dashboard.getPanels().getPanel(UITriggerBlockPanel.class);
+
+            dashboard.setPanel(panel);
+            panel.fill((TriggerBlockEntity) entity, true);
         });
     }
 
@@ -397,7 +449,7 @@ public class ClientNetwork
     }
 
     /* API */
-    
+
     public static void sendModelBlockForm(BlockPos pos, ModelBlockEntity modelBlock)
     {
         crusher.send(MinecraftClient.getInstance().player, ServerNetwork.SERVER_MODEL_BLOCK_FORM_PACKET, modelBlock.getProperties().toData(), (packetByteBuf) ->
@@ -426,6 +478,39 @@ public class ClientNetwork
 
         mapType.putString("id", id);
         ClientNetwork.sendManagerData(RepositoryOperation.LOAD, mapType, consumer);
+    }
+
+
+    public static void sendTriggerBlockUpdate(BlockPos pos, TriggerBlockEntity entity)
+    {
+        MapType data = new MapType();
+
+        data.put("left", entity.left_click.toData());
+        data.put("right", entity.right_click.toData());
+        data.put("enter", entity.enter.toData());
+        data.put("exit", entity.exit.toData());
+        data.put("whileIn", entity.whileIn.toData());
+        data.putInt("regionDelay", entity.regionDelay.get());
+        data.put("pos1", entity.pos1.toData());
+        data.put("pos2", entity.pos2.toData());
+        data.put("regionOffset", entity.regionOffset.toData());
+        data.put("regionSize", entity.regionSize.toData());
+        data.putBool("collidable", entity.collidable.get());
+        data.putBool("region", entity.region.get());
+        data.putInt("entityType", entity.entityType.get());
+
+        crusher.send(MinecraftClient.getInstance().player, ServerNetwork.SERVER_TRIGGER_BLOCK_UPDATE, data, (packetByteBuf) ->
+        {
+            packetByteBuf.writeBlockPos(pos);
+        });
+    }
+
+    public static void sendPlaybackButton(String filmId, boolean withCamera)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeString(filmId);
+        buf.writeBoolean(withCamera);
+        ClientPlayNetworking.send(ServerNetwork.SERVER_PLAYBACK_BUTTON, buf);
     }
 
     public static void sendManagerData(RepositoryOperation op, BaseType data, Consumer<BaseType> consumer)
@@ -569,5 +654,14 @@ public class ClientNetwork
         buf.writeBytes(invBytes);
 
         ClientPlayNetworking.send(ServerNetwork.SERVER_APPLY_FILM_PLAYER_SETTINGS, buf);
+    }
+
+    public static void sendTriggerBlockClick(BlockPos pos)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeBlockPos(pos);
+
+        ClientPlayNetworking.send(ServerNetwork.SERVER_TRIGGER_BLOCK_USE, buf);
     }
 }

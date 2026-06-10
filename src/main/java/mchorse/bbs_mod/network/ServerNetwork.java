@@ -3,6 +3,7 @@ package mchorse.bbs_mod.network;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.ActionManager;
 import mchorse.bbs_mod.actions.ActionPlayer;
+import mchorse.bbs_mod.blocks.entities.TriggerBlockEntity;
 import mchorse.bbs_mod.film.replays.Inventory;
 import mchorse.bbs_mod.actions.ActionRecorder;
 import mchorse.bbs_mod.actions.ActionState;
@@ -20,6 +21,7 @@ import mchorse.bbs_mod.film.FilmManager;
 import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.items.GunProperties;
+import mchorse.bbs_mod.items.playback.PlaybackItem;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.EnumUtils;
@@ -30,18 +32,22 @@ import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.block.Block;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.apache.logging.log4j.core.jmx.Server;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,6 +77,8 @@ public class ServerNetwork
     public static final Identifier CLIENT_SELECTED_SLOT = new Identifier(BBSMod.MOD_ID, "c15");
     public static final Identifier CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = new Identifier(BBSMod.MOD_ID, "c16");
     public static final Identifier CLIENT_REFRESH_MODEL_BLOCKS = new Identifier(BBSMod.MOD_ID, "c17");
+    public static final Identifier CLIENT_CLICKED_TRIGGER_BLOCK_PACKET = new Identifier(BBSMod.MOD_ID, "c18");
+    public static final Identifier CLIENT_OPEN_PLAYBACK_PANEL = new Identifier(BBSMod.MOD_ID, "c19");
 
     public static final Identifier SERVER_MODEL_BLOCK_FORM_PACKET = new Identifier(BBSMod.MOD_ID, "s1");
     public static final Identifier SERVER_MODEL_BLOCK_TRANSFORMS_PACKET = new Identifier(BBSMod.MOD_ID, "s2");
@@ -86,6 +94,10 @@ public class ServerNetwork
     public static final Identifier SERVER_ZOOM = new Identifier(BBSMod.MOD_ID, "s12");
     public static final Identifier SERVER_PAUSE_FILM = new Identifier(BBSMod.MOD_ID, "s13");
     public static final Identifier SERVER_APPLY_FILM_PLAYER_SETTINGS = new Identifier(BBSMod.MOD_ID, "s14");
+    public static final Identifier SERVER_TRIGGER_BLOCK_USE = new Identifier(BBSMod.MOD_ID, "s15");
+    public static final Identifier SERVER_TRIGGER_BLOCK_UPDATE = new Identifier(BBSMod.MOD_ID, "s16");
+    public static final Identifier SERVER_PLAYBACK_BUTTON = new Identifier(BBSMod.MOD_ID, "s17");
+
 
     private static ServerPacketCrusher crusher = new ServerPacketCrusher();
 
@@ -110,6 +122,34 @@ public class ServerNetwork
         ServerPlayNetworking.registerGlobalReceiver(SERVER_ZOOM, (server, player, handler, buf, responder) -> handleZoomPacket(server, player, buf));
         ServerPlayNetworking.registerGlobalReceiver(SERVER_PAUSE_FILM, (server, player, handler, buf, responder) -> handlePauseFilmPacket(server, player, buf));
         ServerPlayNetworking.registerGlobalReceiver(SERVER_APPLY_FILM_PLAYER_SETTINGS, (server, player, handler, buf, responder) -> handleApplyFilmPlayerSettings(server, player, buf));
+        ServerPlayNetworking.registerGlobalReceiver(SERVER_TRIGGER_BLOCK_USE, (server, player, handler, buf, responder) -> handleTriggerBlockUsePacket(server, player, buf));
+        ServerPlayNetworking.registerGlobalReceiver(SERVER_TRIGGER_BLOCK_UPDATE, (server, player, handler, buf, responder) -> handleTriggerBlockUpdatePacket(server, player, buf));
+
+        ServerPlayNetworking.registerGlobalReceiver(SERVER_PLAYBACK_BUTTON, (server, player, handler, buf, responseSender) -> {
+            String filmId = buf.readString(32767);
+            boolean withCamera = buf.readBoolean();
+
+            server.execute(() -> {
+                ItemStack stack = player.getStackInHand(Hand.MAIN_HAND);
+
+                if (!(stack.getItem() instanceof PlaybackItem)) {
+                    stack = player.getStackInHand(Hand.OFF_HAND);
+                }
+
+                if (!(stack.getItem() instanceof PlaybackItem)) return;
+
+                NbtCompound nbt = stack.getOrCreateNbt();
+
+                if (filmId.isEmpty()) {
+                    nbt.remove("Film");
+                } else {
+                    nbt.putString("Film", filmId);
+                }
+
+                nbt.putBoolean("WithCamera", withCamera);
+            });
+        });
+
     }
 
     /* Handlers */
@@ -142,6 +182,76 @@ public class ServerNetwork
             }
             catch (Exception e)
             {}
+        });
+    }
+
+    private static void handleTriggerBlockUpdatePacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
+        crusher.receive(buf, (bytes, packetByteBuf) ->
+        {
+            BlockPos pos = packetByteBuf.readBlockPos();
+
+            try
+            {
+                MapType data = (MapType) DataStorageUtils.readFromBytes(bytes);
+
+                server.execute(() ->
+                {
+                    World world = player.getWorld();
+                    BlockEntity be = world.getBlockEntity(pos);
+
+                    if (be instanceof TriggerBlockEntity trigger)
+                    {
+                        if (data.has("left")) trigger.left_click.fromData(data.getList("left"));
+                        if (data.has("right")) trigger.right_click.fromData(data.getList("right"));
+                        if (data.has("enter")) trigger.enter.fromData(data.getList("enter"));
+                        if (data.has("exit")) trigger.exit.fromData(data.getList("exit"));
+                        if (data.has("whileIn")) trigger.whileIn.fromData(data.getList("whileIn"));
+                        if (data.has("regionDelay")) trigger.regionDelay.set(data.getInt("regionDelay"));
+                        if (data.has("pos1")) trigger.pos1.fromData(data.getList("pos1"));
+                        if (data.has("pos2")) trigger.pos2.fromData(data.getList("pos2"));
+                        if (data.has("regionOffset")) trigger.regionOffset.fromData(data.getList("regionOffset"));
+                        if (data.has("regionSize")) trigger.regionSize.fromData(data.getList("regionSize"));
+                        if (data.has("collidable")) trigger.collidable.set(data.getBool("collidable"));
+                        if (data.has("region")) trigger.region.set(data.getBool("region"));
+                        if (data.has("entityType")) trigger.entityType.set(data.getInt("entityType"));
+
+                        trigger.markDirty();
+                        world.updateListeners(pos, world.getBlockState(pos), world.getBlockState(pos), 3);
+                    }
+                });
+            }
+            catch (Exception e)
+            {}
+        });
+    }
+
+    private static void handleTriggerBlockUsePacket(MinecraftServer server, ServerPlayerEntity player, PacketByteBuf buf)
+    {
+        if (!PermissionUtils.arePanelsAllowed(server, player))
+        {
+            return;
+        }
+
+        crusher.receive(buf, (bytes, packetByteBuf) ->
+        {
+            BlockPos pos = buf.readBlockPos();
+
+            server.execute(() ->
+            {
+                World world = player.getWorld();
+                BlockEntity be = world.getBlockEntity(pos);
+
+                if (be instanceof TriggerBlockEntity trigger)
+                {
+                    trigger.trigger(player, false);
+                }
+            });
         });
     }
 
@@ -303,6 +413,8 @@ public class ServerNetwork
 
         String filmId = buf.readString();
         boolean withCamera = buf.readBoolean();
+
+        if (filmId.isEmpty()) return;
 
         server.execute(() ->
         {
@@ -596,6 +708,15 @@ public class ServerNetwork
         buf.writeBlockPos(pos);
 
         ServerPlayNetworking.send(player, CLIENT_CLICKED_MODEL_BLOCK_PACKET, buf);
+    }
+
+    public static void sendClickedTriggerBlock(ServerPlayerEntity player, BlockPos pos)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeBlockPos(pos);
+
+        ServerPlayNetworking.send(player, CLIENT_CLICKED_TRIGGER_BLOCK_PACKET, buf);
     }
 
     public static void sendPlayFilm(ServerPlayerEntity player, ServerWorld world, String filmId, boolean withCamera)

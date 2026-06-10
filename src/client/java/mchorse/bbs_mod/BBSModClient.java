@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.audio.SoundManager;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
+import mchorse.bbs_mod.blocks.entities.TriggerBlockEntity;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
@@ -11,10 +12,12 @@ import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
+import mchorse.bbs_mod.client.renderer.TriggerBlockEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
+import mchorse.bbs_mod.client.renderer.item.PlaybackItemRenderer;
 import mchorse.bbs_mod.cubic.model.ModelManager;
 import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterL10nEvent;
@@ -69,6 +72,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.impl.client.rendering.BlockEntityRendererRegistryImpl;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -84,6 +88,7 @@ import net.minecraft.client.util.Window;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -125,6 +130,7 @@ public class BBSModClient implements ClientModInitializer
     private static CameraController cameraController = new CameraController();
     private static ModelBlockItemRenderer modelBlockItemRenderer = new ModelBlockItemRenderer();
     private static GunItemRenderer gunItemRenderer = new GunItemRenderer();
+    private static PlaybackItemRenderer playbackItemRenderer = new PlaybackItemRenderer();
     private static Films films;
     private static GunZoom gunZoom;
     private static String playFilmAndRecordFilmId;
@@ -290,6 +296,7 @@ public class BBSModClient implements ClientModInitializer
         }
 
         GunItemRenderer.Item gunItem = gunItemRenderer.get(stack);
+        PlaybackItemRenderer.Item playbackItem = playbackItemRenderer.get(stack);
 
         if (gunItem != null)
         {
@@ -369,6 +376,23 @@ public class BBSModClient implements ClientModInitializer
     @Override
     public void onInitializeClient()
     {
+        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) ->
+        {
+            if (world.getBlockEntity(pos) instanceof TriggerBlockEntity)
+            {
+                if (player.isCreative())
+                {
+                    return ActionResult.PASS;
+                }
+
+                ClientNetwork.sendTriggerBlockClick(pos);
+
+                return ActionResult.SUCCESS;
+            }
+
+            return ActionResult.PASS;
+        });
+
         AssetProvider provider = BBSMod.getProvider();
 
         textures = new TextureManager(provider);
@@ -420,11 +444,11 @@ public class BBSModClient implements ClientModInitializer
         );
 
         BBSSettings.keystrokeMode.modes(
-            UIKeys.ENGINE_KEYSTROKES_POSITION_AUTO,
-            UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_LEFT,
-            UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_RIGHT,
-            UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_RIGHT,
-            UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_LEFT
+                UIKeys.ENGINE_KEYSTROKES_POSITION_AUTO,
+                UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_LEFT,
+                UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_RIGHT,
+                UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_RIGHT,
+                UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_LEFT
         );
 
         UIKeys.C_KEYBIND_CATGORIES.load(KeyCombo.getCategoryKeys());
@@ -512,6 +536,8 @@ public class BBSModClient implements ClientModInitializer
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
         {
             dashboard = null;
+            films.reset();
+            cameraController.reset();
             films = new Films();
             this.stopVideoRecording();
             playFilmAndRecordFilmId = null;
@@ -524,6 +550,7 @@ public class BBSModClient implements ClientModInitializer
         ClientTickEvents.START_CLIENT_TICK.register((client) ->
         {
             BBSRendering.startTick();
+            BBSRendering.capturedTriggerBlocks.clear();
         });
 
         ClientTickEvents.END_WORLD_TICK.register((client) ->
@@ -554,6 +581,7 @@ public class BBSModClient implements ClientModInitializer
                 films.update();
                 modelBlockItemRenderer.update();
                 gunItemRenderer.update();
+                playbackItemRenderer.update();
                 textures.update();
             }
 
@@ -660,9 +688,11 @@ public class BBSModClient implements ClientModInitializer
         EntityRendererRegistry.register(BBSMod.GUN_PROJECTILE_ENTITY, GunProjectileEntityRenderer::new);
 
         BlockEntityRendererRegistryImpl.register(BBSMod.MODEL_BLOCK_ENTITY, ModelBlockEntityRenderer::new);
+        BlockEntityRendererRegistryImpl.register(BBSMod.TRIGGER_BLOCK_ENTITY, TriggerBlockEntityRenderer::new);
 
         BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.MODEL_BLOCK_ITEM, modelBlockItemRenderer);
         BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.GUN_ITEM, gunItemRenderer);
+        BuiltinItemRendererRegistry.INSTANCE.register(BBSMod.PLAYBACK_ITEM, playbackItemRenderer);
 
         /* Create folders */
         BBSMod.getAudioFolder().mkdirs();
@@ -734,6 +764,7 @@ public class BBSModClient implements ClientModInitializer
         ItemStack stack = mc.player.getEquippedStack(EquipmentSlot.MAINHAND);
         ModelBlockItemRenderer.Item item = modelBlockItemRenderer.get(stack);
         GunItemRenderer.Item gunItem = gunItemRenderer.get(stack);
+        PlaybackItemRenderer.Item playbackItem = playbackItemRenderer.get(stack);
 
         if (item != null)
         {

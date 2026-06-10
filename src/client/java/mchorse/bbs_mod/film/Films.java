@@ -47,6 +47,8 @@ public class Films
 
     public static void playFilm(String filmId, boolean withCamera)
     {
+        if (filmId == null || filmId.isEmpty()) return;
+
         if (ClientNetwork.isIsBBSModOnServer())
         {
             ClientNetwork.sendToggleFilm(filmId, withCamera);
@@ -260,7 +262,7 @@ public class Films
             if (film.hasFinished())
             {
                 if (this.stopVideoRecordingWhenFilmFinishedId != null
-                    && film.film.getId().equals(this.stopVideoRecordingWhenFilmFinishedId))
+                        && film.film.getId().equals(this.stopVideoRecordingWhenFilmFinishedId))
                 {
                     if (BBSModClient.getVideoRecorder().isRecording())
                     {
@@ -315,8 +317,8 @@ public class Films
         if (recorder != null && BBSSettings.recordingOverlays.get())
         {
             String label = recorder.hasNotStarted() ?
-                String.valueOf(TimeUtils.toSeconds(recorder.countdown)) :
-                UIKeys.FILM_RECORDING.format(recorder.getTick()).get();
+                    String.valueOf(TimeUtils.toSeconds(recorder.countdown)) :
+                    UIKeys.FILM_RECORDING.format(recorder.getTick()).get();
             int x = 5;
             int y = 5;
             int w = batcher2D.getFont().getWidth(label);

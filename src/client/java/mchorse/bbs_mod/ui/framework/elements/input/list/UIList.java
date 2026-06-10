@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  * 
  * This element allows managing scrolling vertical lists much easier
  */
-public abstract class UIList <T> extends UIElement
+public class UIList <T> extends UIElement
 {
     /**
      * List of elements 
