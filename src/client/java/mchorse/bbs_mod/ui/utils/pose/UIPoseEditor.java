@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.utils.pose;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.ui.Keys;
@@ -189,7 +190,7 @@ public class UIPoseEditor extends UIElement
         }
 
         List<String> bones = new ArrayList<>(model.getGroupKeysInHierarchyOrder());
-        if (disabledBones != null && !disabledBones.isEmpty())
+        if (BBSSettings.disabledBonesEnabled.get() && disabledBones != null && !disabledBones.isEmpty())
         {
             bones.removeIf(disabledBones::contains);
         }

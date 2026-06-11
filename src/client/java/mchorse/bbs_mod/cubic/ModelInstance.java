@@ -42,10 +42,7 @@ import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Supplier;
 
 public class ModelInstance implements IModelInstance
@@ -114,6 +111,10 @@ public class ModelInstance implements IModelInstance
     public Map<ModelGroup, ModelVAO> getVaos()
     {
         return this.vaos;
+    }
+
+    public List<String> getEffectiveDisabledBones(boolean enabled) {
+        return enabled ? this.disabledBones : Collections.emptyList();
     }
 
     public String getAnchor()

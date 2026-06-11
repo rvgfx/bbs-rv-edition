@@ -80,6 +80,7 @@ public class BBSSettings {
 	public static ValueInt videoWidth;
 	public static ValueInt videoHeight;
 	public static ValueInt videoFrameRate;
+	public static ValueBoolean videoLimitFrameRate;
 	public static ValueString videoExportPath;
 	public static ValueBoolean videoExportAudio;
 	public static ValueInt videoMotionBlur;
@@ -134,6 +135,7 @@ public class BBSSettings {
 	public static ValueBoolean renderAllModelBlocks;
 	public static ValueBoolean clickModelBlocks;
 	public static ValueInt setPlayStateDistance;
+	public static ValueBoolean disabledBonesEnabled;
 
 	public static ValueString entitySelectorsPropertyWhitelist;
 
@@ -453,6 +455,7 @@ public class BBSSettings {
 		videoWidth = builder.getInt("width", 1280, 2, 8096);
 		videoHeight = builder.getInt("height", 720, 2, 8096);
 		videoFrameRate = builder.getInt("frame_rate", 60, 10, 1000);
+		videoLimitFrameRate = builder.getBoolean("limit_frame_rate", false);
 		videoExportPath = builder.getString("export_path", "");
 		videoExportAudio = builder.getBoolean("audio", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
@@ -509,6 +512,7 @@ public class BBSSettings {
 		renderAllModelBlocks = builder.getBoolean("render_all", true);
 		clickModelBlocks = builder.getBoolean("click", true);
 		setPlayStateDistance = builder.getInt("play_state_distance", 64);
+		disabledBonesEnabled = builder.getBoolean("disabled_bones", true);
 
 		builder.category("entity_selectors", Icons.POINTER);
 		entitySelectorsPropertyWhitelist = builder.getString("whitelist", "CustomName,Name");

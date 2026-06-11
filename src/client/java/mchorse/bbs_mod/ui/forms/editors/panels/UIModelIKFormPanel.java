@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.forms.editors.panels;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.ModelInstance;
 import mchorse.bbs_mod.cubic.ik.ModelIKConfig;
 import mchorse.bbs_mod.cubic.ik.ModelIKDebug;
@@ -208,7 +209,7 @@ public class UIModelIKFormPanel extends UIFormPanel<ModelForm>
         else
         {
             List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-            bones.removeIf(model.disabledBones::contains);
+            if (BBSSettings.disabledBonesEnabled.get()) bones.removeIf(model.disabledBones::contains);
 
             this.bones.setList(bones);
             this.setElementsEnabled(true);
