@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.film.replays;
 
 import mchorse.bbs_mod.cubic.IModel;
+import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.BaseFilmController;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.utils.Area;
@@ -269,7 +270,66 @@ public class UIReplaysEditorUtils
             String id = PerLimbService.toIKTargetKey(path, controller);
             String title = path.isEmpty() ? "IK/" + controller : path + "/IK/" + controller;
 
-            addTargetSheet(out, properties, id, title, Colors.CYAN, Icons.LIMB);
+            addTargetSheet(out, properties, id, title, Colors.CYAN, null);
+        }
+    }
+
+    /**
+     * One IK-controls track per form (only if it has enabled chains): a single
+     * keyframe sheet whose value holds the per-chain scalars (weight, softness,
+     * pole, enabled), layered over the form's IK config at playback — mirrors the
+     * single pose track. It is not a form property, so it carries its owning form
+     * for the editor to list chains.
+     */
+    public static void addIKControlSheet(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        model.form = modelForm;
+
+        if (ModelIKRuntime.getControllers(model).isEmpty())
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+        String id = PerLimbService.toIKControlKey(path);
+        String title = path.isEmpty() ? "IK" : path + "/IK";
+
+        KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
+
+        out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.YELLOW, false, channel, null).icon(Icons.LIMB).form(modelForm));
+    }
+
+    public static void addPoleTargetSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        model.form = modelForm;
+        List<String> controllers = ModelIKRuntime.getPoleControllers(model);
+        String path = FormUtils.getPath(modelForm);
+
+        for (String controller : controllers)
+        {
+            if (controller == null || controller.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toPoleTargetKey(path, controller);
+            String title = path.isEmpty() ? "Pole/" + controller : path + "/Pole/" + controller;
+
+            addTargetSheet(out, properties, id, title, Colors.ORANGE, null);
         }
     }
 
@@ -283,7 +343,8 @@ public class UIReplaysEditorUtils
         }
 
         ModelPhysicsConfig physics = null;
-        if (modelForm.physics.get() instanceof mchorse.bbs_mod.data.types.MapType map)
+
+        if (modelForm.physics.get() instanceof MapType map)
         {
             physics = ModelPhysicsIO.fromData(map);
         }
@@ -908,21 +969,31 @@ public class UIReplaysEditorUtils
         }
 
         List<String> controllers = ModelIKRuntime.getControllers(model);
+        List<String> poleControllers = ModelIKRuntime.getPoleControllers(model);
         String path = FormUtils.getPath(modelForm);
 
         BaseValue.edit(replay.properties, (props) ->
         {
             for (String controller : controllers)
             {
-                String id = PerLimbService.toIKTargetKey(path, controller);
-                KeyframeChannel channel = props.properties.get(id);
+                removeChannel(props, PerLimbService.toIKTargetKey(path, controller));
+            }
 
-                if (channel != null)
-                {
-                    channel.removeAll();
-                }
+            for (String controller : poleControllers)
+            {
+                removeChannel(props, PerLimbService.toPoleTargetKey(path, controller));
             }
         });
+    }
+
+    private static void removeChannel(FormProperties props, String id)
+    {
+        KeyframeChannel channel = props.properties.get(id);
+
+        if (channel != null)
+        {
+            channel.removeAll();
+        }
     }
 
     /* Offer bone hierarchy options */
