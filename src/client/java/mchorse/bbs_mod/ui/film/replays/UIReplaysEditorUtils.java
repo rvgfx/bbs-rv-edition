@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.cubic.IModel;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.BaseFilmController;
@@ -217,7 +218,7 @@ public class UIReplaysEditorUtils
 
         for (String bone : bones)
         {
-            if (model.disabledBones.contains(bone))
+            if (BBSSettings.disabledBonesEnabled.get() && model.disabledBones.contains(bone))
             {
                 continue;
             }
@@ -914,7 +915,7 @@ public class UIReplaysEditorUtils
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
 
-        bones.removeIf(model.disabledBones::contains);
+        if (BBSSettings.disabledBonesEnabled.get()) bones.removeIf(model.disabledBones::contains);
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
@@ -1058,7 +1059,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getAdjacentGroups(bone))
                 {
-                    if (model.disabledBones.contains(modelGroup))
+                    if (BBSSettings.disabledBonesEnabled.get() && model.disabledBones.contains(modelGroup))
                     {
                         continue;
                     }
@@ -1091,7 +1092,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getHierarchyGroups(bone))
                 {
-                    if (model.disabledBones.contains(modelGroup))
+                    if (BBSSettings.disabledBonesEnabled.get() && model.disabledBones.contains(modelGroup))
                     {
                         continue;
                     }

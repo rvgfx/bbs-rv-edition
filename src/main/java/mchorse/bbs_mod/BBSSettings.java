@@ -135,6 +135,7 @@ public class BBSSettings {
 	public static ValueBoolean renderAllModelBlocks;
 	public static ValueBoolean clickModelBlocks;
 	public static ValueInt setPlayStateDistance;
+	public static ValueBoolean disabledBonesEnabled;
 
 	public static ValueString entitySelectorsPropertyWhitelist;
 
@@ -511,6 +512,7 @@ public class BBSSettings {
 		renderAllModelBlocks = builder.getBoolean("render_all", true);
 		clickModelBlocks = builder.getBoolean("click", true);
 		setPlayStateDistance = builder.getInt("play_state_distance", 64);
+		disabledBonesEnabled = builder.getBoolean("disabled_bones", true);
 
 		builder.category("entity_selectors", Icons.POINTER);
 		entitySelectorsPropertyWhitelist = builder.getString("whitelist", "CustomName,Name");

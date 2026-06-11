@@ -752,6 +752,8 @@ public class UIKeys
     public static final IKey ACTION_FILM = L10n.lang("bbs.ui.trigger_blocks.action_film");
     public static final IKey PLAY_CAMERA = L10n.lang("bbs.ui.trigger_blocks.play_camera");
 
+    public static final IKey MODEL_BLOCKS_DISABLED_BONES = L10n.lang("bbs.ui.model_blocks.disabled_bones");
+
     public static final IKey RENDER_QUEUE_PICK_TITLE = L10n.lang("bbs.ui.trigger_blocks.render_queue");
 
 

@@ -240,7 +240,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
         }
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-        bones.removeIf(model.disabledBones::contains);
+        if (BBSSettings.disabledBonesEnabled.get()) bones.removeIf(model.disabledBones::contains);
 
         return bones;
     }

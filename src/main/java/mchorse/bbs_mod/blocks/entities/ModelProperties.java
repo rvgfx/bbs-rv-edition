@@ -39,6 +39,10 @@ public class ModelProperties implements IMapSerializable
 
         return form;
     }
+    private boolean disabledBones = true;
+
+    public boolean isDisabledBonesEnabled() { return this.disabledBones; }
+    public void setDisabledBonesEnabled(boolean v) { this.disabledBones = v; }
 
     public void setForm(Form form)
     {
