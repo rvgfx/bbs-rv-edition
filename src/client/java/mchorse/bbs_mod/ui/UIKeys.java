@@ -222,6 +222,8 @@ public class UIKeys
     public static final IKey ENGINE_KEYSTROKES_POSITION_BOTTOM_RIGHT = L10n.lang("bbs.keystrokes_position.bottom_right");
     public static final IKey ENGINE_KEYSTROKES_POSITION_TOP_LEFT = L10n.lang("bbs.keystrokes_position.top_left");
     public static final IKey ENGINE_KEYSTROKES_POSITION_TOP_RIGHT = L10n.lang("bbs.keystrokes_position.top_right");
+    public static final IKey ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL = L10n.lang("bbs.rotate_3d_sphere_mode.trackball");
+    public static final IKey ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL = L10n.lang("bbs.rotate_3d_sphere_mode.arcball");
     public static final IKey ENGINE_THEME_DARK = L10n.lang("bbs.theme.dark");
     public static final IKey ENGINE_THEME_LIGHT = L10n.lang("bbs.theme.light");
     public static final IKey FILM_CONTROLLER_CONTROL_MODE_TOOLTIP = L10n.lang("bbs.ui.film.controller.control_mode-tooltip");
@@ -1115,6 +1117,12 @@ public class UIKeys
     public static final IKey TRANSFORMS_CONTEXT_SWITCH_GLOBAL = L10n.lang("bbs.ui.transforms.context.switch_global");
     public static final IKey TRANSFORMS_CONTEXT_SWITCH_LOCAL = L10n.lang("bbs.ui.transforms.context.switch_local");
     public static final IKey TRANSFORMS_EDITING = L10n.lang("bbs.ui.transforms.editing");
+    public static final IKey TRANSFORMS_SPACE_GLOBAL = L10n.lang("bbs.ui.transforms.space.global");
+    public static final IKey TRANSFORMS_SPACE_LOCAL = L10n.lang("bbs.ui.transforms.space.local");
+    public static final IKey TRANSFORMS_TARGET_SCREEN = L10n.lang("bbs.ui.transforms.target.screen");
+    public static final IKey TRANSFORMS_TARGET_SPHERE = L10n.lang("bbs.ui.transforms.target.sphere");
+    public static final IKey TRANSFORMS_TARGET_VIEW = L10n.lang("bbs.ui.transforms.target.view");
+    public static final IKey ORDER_RESET = L10n.lang("bbs.ui.order.reset");
     public static final IKey TRANSFORMS_KEYS_CATEGORY = L10n.lang("bbs.ui.transforms.keys.category");
     public static final IKey TRANSFORMS_KEYS_TOGGLE_AXES = L10n.lang("bbs.ui.transforms.keys.toggle_axes");
     public static final IKey TRANSFORMS_KEYS_TOGGLE_FIX = L10n.lang("bbs.ui.transforms.keys.toggle_fix");
