@@ -91,7 +91,6 @@ public class UIPoseEditor extends UIElement
             });
         });
         this.transform = this.createTransformEditor();
-        this.transform.setModel();
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
@@ -277,13 +276,6 @@ public class UIPoseEditor extends UIElement
         public void setR(Axis axis, double x, double y, double z)
         {
             super.setR(axis, x, y, z);
-            UIPoseEditor.this.syncPoseTransformToSelection();
-        }
-
-        @Override
-        public void setR2(Axis axis, double x, double y, double z)
-        {
-            super.setR2(axis, x, y, z);
             UIPoseEditor.this.syncPoseTransformToSelection();
         }
     }
