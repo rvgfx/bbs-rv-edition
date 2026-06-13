@@ -20,6 +20,7 @@ import mchorse.bbs_mod.ui.utils.UIUtils;
 import mchorse.bbs_mod.ui.utils.keys.KeyAction;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Axis;
+import mchorse.bbs_mod.utils.Direction;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.Timer;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -1257,12 +1258,12 @@ public class UIPropTransform extends UITransform
     private void applyRayScaleAxis(Vector3d hit, Axis currentAxis, boolean all, Vector3f s)
     {
         Vector3f axisDir = this.dragWorldBasis.getColumn(currentAxis.ordinal(), new Vector3f());
-        
+
         if (axisDir.lengthSquared() < 1.0E-8F)
         {
             return;
         }
-        
+
         axisDir.normalize();
 
         double rx = hit.x - this.drag.gizmoOrigin.x;
@@ -3049,16 +3050,16 @@ public class UIPropTransform extends UITransform
             this.spacesBar.area.render(context.batcher, Colors.A50);
         }
 
-        UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area);
+        UIDashboardPanels.renderHighlight(context.batcher, this.activeSpaceIcon().area, Direction.BOTTOM);
 
         if (this.mirror != null && BBSSettings.poseMirrorEdit.get())
         {
-            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area);
+            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area,Direction.BOTTOM);
         }
 
         if (this.invert != null && BBSSettings.poseAlternateInvert.get())
         {
-            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area);
+            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area,Direction.BOTTOM);
         }
 
         super.render(context);
@@ -3235,7 +3236,7 @@ public class UIPropTransform extends UITransform
                     return true;
                 }
             }
-            
+
             return super.subMouseClicked(context);
         }
 
