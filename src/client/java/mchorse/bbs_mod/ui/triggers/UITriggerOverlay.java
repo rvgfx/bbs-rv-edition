@@ -86,6 +86,7 @@ public class UITriggerOverlay extends UIEditorOverlayPanel<Trigger> {
                     {
                         Trigger newTrigger = new Trigger("");
                         newTrigger.fromData(DataStorageUtils.fromNbt(element));
+                        this.trigger.add(newTrigger);
                         this.list.getList().add(newTrigger);
                         this.list.update();
                         this.pickItem(newTrigger, true);
