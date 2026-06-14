@@ -40,6 +40,8 @@ import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UITransfo
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.graphs.IUIKeyframeGraph;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.Pair;
+import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.core.ValueLink;
 import mchorse.bbs_mod.settings.values.core.ValueTransform;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -270,7 +272,7 @@ public class UIReplaysEditorUtils
             }
 
             String id = PerLimbService.toIKTargetKey(path, controller);
-            String title = path.isEmpty() ? "IK/" + controller : path + "/IK/" + controller;
+            String title = path.isEmpty() ? "ik/" + controller : path + "/ik/" + controller;
 
             addTargetSheet(out, properties, id, title, Colors.CYAN, null);
         }
@@ -301,7 +303,7 @@ public class UIReplaysEditorUtils
 
         String path = FormUtils.getPath(modelForm);
         String id = PerLimbService.toIKControlKey(path);
-        String title = path.isEmpty() ? "IK" : path + "/IK";
+        String title = path.isEmpty() ? "ik" : path + "/ik";
 
         KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.IK);
 
@@ -329,7 +331,7 @@ public class UIReplaysEditorUtils
             }
 
             String id = PerLimbService.toPoleTargetKey(path, controller);
-            String title = path.isEmpty() ? "Pole/" + controller : path + "/Pole/" + controller;
+            String title = path.isEmpty() ? "pole/" + controller : path + "/pole/" + controller;
 
             addTargetSheet(out, properties, id, title, Colors.ORANGE, null);
         }
@@ -362,9 +364,52 @@ public class UIReplaysEditorUtils
         {
             String rootBone = entry.getKey();
             String id = PerLimbService.toPhysicsTargetKey(path, rootBone);
-            String title = path.isEmpty() ? "Physics/" + rootBone : path + "/Physics/" + rootBone;
+            String title = path.isEmpty() ? "physics/" + rootBone : path + "/physics/" + rootBone;
 
             addTargetSheet(out, properties, id, title, Colors.MAGENTA, Icons.TIME);
+        }
+    }
+
+    /**
+     * One texture track per model material (OBJ material name / BOBJ mesh name), enumerated from
+     * the loaded model. Each is a LINK channel layered over the material's static default at
+     * playback - mirrors the bone tracks. Lives in the Model category beside the main texture track.
+     */
+    public static void addMaterialTextureSheets(ModelForm modelForm, FormProperties properties, List<UIKeyframeSheet> out)
+    {
+        ModelInstance model = ModelFormRenderer.getModel(modelForm);
+
+        if (model == null)
+        {
+            return;
+        }
+
+        String path = FormUtils.getPath(modelForm);
+
+        for (String material : model.materials)
+        {
+            if (material == null || material.isEmpty())
+            {
+                continue;
+            }
+
+            String id = PerLimbService.toMaterialTextureKey(path, material);
+            String title = path.isEmpty() ? "texture/" + material : path + "/texture/" + material;
+            KeyframeChannel channel = properties.registerChannel(id, KeyframeFactories.LINK);
+
+            /* Seed the sheet's value with the material's current default texture (editor pick, else
+             * folder/Kd, else the form/model default) so a new keyframe starts there instead of null -
+             * the texture picker then opens at that texture rather than the root. */
+            Link materialDefault = modelForm.materialTextures.getLink(material);
+
+            if (materialDefault == null)
+            {
+                materialDefault = model.getMaterialTexture(material, model.texture);
+            }
+
+            ValueLink property = new ValueLink(id, materialDefault);
+
+            out.add(new UIKeyframeSheet(id, IKey.constant(title), Colors.BLUE, false, channel, property).icon(Icons.MATERIAL));
         }
     }
 
