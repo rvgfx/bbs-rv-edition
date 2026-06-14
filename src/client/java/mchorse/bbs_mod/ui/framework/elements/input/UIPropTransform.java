@@ -1258,12 +1258,12 @@ public class UIPropTransform extends UITransform
     private void applyRayScaleAxis(Vector3d hit, Axis currentAxis, boolean all, Vector3f s)
     {
         Vector3f axisDir = this.dragWorldBasis.getColumn(currentAxis.ordinal(), new Vector3f());
-
+        
         if (axisDir.lengthSquared() < 1.0E-8F)
         {
             return;
         }
-
+        
         axisDir.normalize();
 
         double rx = hit.x - this.drag.gizmoOrigin.x;
@@ -3054,12 +3054,12 @@ public class UIPropTransform extends UITransform
 
         if (this.mirror != null && BBSSettings.poseMirrorEdit.get())
         {
-            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area,Direction.BOTTOM);
+            UIDashboardPanels.renderHighlight(context.batcher, this.mirror.area, Direction.BOTTOM);
         }
 
         if (this.invert != null && BBSSettings.poseAlternateInvert.get())
         {
-            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area,Direction.BOTTOM);
+            UIDashboardPanels.renderHighlight(context.batcher, this.invert.area, Direction.BOTTOM);
         }
 
         super.render(context);
@@ -3236,7 +3236,7 @@ public class UIPropTransform extends UITransform
                     return true;
                 }
             }
-
+            
             return super.subMouseClicked(context);
         }
 
