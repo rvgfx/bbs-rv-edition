@@ -67,10 +67,6 @@ public class UIPropTransform extends UITransform
     private Transform cache = new Transform();
     private Timer checker = new Timer(30);
 
-    /** The space the per-instance UI (relative trackpads, field resync) was last
-     *  configured for — the space itself is the shared {@link BBSSettings#transformSpace}. */
-    private TransformSpace uiSpace;
-
     /* Ray-based drag state for translate mode */
     private GizmoDrag drag;
     /**
@@ -210,7 +206,6 @@ public class UIPropTransform extends UITransform
     public UIPropTransform()
     {
         this.handler = new UITransformHandler(this);
-        this.uiSpace = this.getSpace();
 
         this.spaceParent = new UIIcon(Icons.ALL_DIRECTIONS, (b) -> this.setSpace(TransformSpace.PARENT));
         this.spaceParent.tooltip(UIKeys.TRANSFORMS_CONTEXT_SWITCH_GLOBAL);
@@ -237,8 +232,6 @@ public class UIPropTransform extends UITransform
 
         this.prepend(this.spacesBar);
         this.h(4 * UIConstants.CONTROL_HEIGHT);
-
-        this.updateLocalUI();
 
         this.noCulling();
     }
@@ -345,40 +338,6 @@ public class UIPropTransform extends UITransform
         this.setSpace(this.getSpace().next());
     }
 
-    private void updateLocalUI()
-    {
-        boolean delta = this.getSpace() != TransformSpace.PARENT;
-
-        this.tx.relative(delta);
-        this.ty.relative(delta);
-        this.tz.relative(delta);
-    }
-
-    /**
-     * In local space the translate trackpads feed deltas, so mid-gesture their
-     * readout is the gesture's own accumulation (start value plus the dragged
-     * amount) and must not be touched — rewriting it would break the delta
-     * anchor. The moment no field is being dragged or typed into, pin them
-     * back to the canonical translate values.
-     */
-    private void syncLocalTranslateFields()
-    {
-        if (this.tx.isDragging() || this.ty.isDragging() || this.tz.isDragging()
-            || this.tx.textbox.isFocused() || this.ty.textbox.isFocused() || this.tz.textbox.isFocused())
-        {
-            return;
-        }
-
-        Vector3f t = this.transform.translate;
-
-        if (Math.abs(this.tx.getValue() - t.x) > 1.0E-6D
-            || Math.abs(this.ty.getValue() - t.y) > 1.0E-6D
-            || Math.abs(this.tz.getValue() - t.z) > 1.0E-6D)
-        {
-            this.fillT(t.x, t.y, t.z);
-        }
-    }
-
     /**
      * Unit direction (in {@code transform.translate} units) one unit of input
      * moves along the given axis in the active space. The anchored ray basis is
@@ -447,13 +406,25 @@ public class UIPropTransform extends UITransform
 
     public UIPropTransform enableHotkeys()
     {
-        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
-        Supplier<Boolean> active = () -> this.editing;
+        return this.enableHotkeys(() -> true);
+    }
 
-        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).category(category);
-        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().category(category);
+    /**
+     * Same as {@link #enableHotkeys()}, but every registered hotkey is gated by {@code enabled}. When
+     * it returns {@code false} the keybinds report inactive, so input propagation flows past this
+     * transform to whichever element is checked next &mdash; this is how two transforms that coexist in
+     * the tree (e.g. the body part transform in the sidebar alongside the active form panel's transform)
+     * avoid both grabbing on G/S/R: only the one whose gate is on responds.
+     */
+    public UIPropTransform enableHotkeys(Supplier<Boolean> enabled)
+    {
+        IKey category = UIKeys.TRANSFORMS_KEYS_CATEGORY;
+        Supplier<Boolean> active = () -> enabled.get() && this.editing;
+
+        this.keys().register(Keys.TRANSFORMATIONS_TRANSLATE, () -> this.enableMode(0)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_SCALE, () -> this.enableMode(1)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_ROTATE, () -> this.enableMode(2)).active(enabled).category(category);
+        this.keys().register(Keys.TRANSFORMATIONS_COMBINED, () -> Gizmo.INSTANCE.toggleCombined()).strict().active(enabled).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_X, () -> this.setEditingAxis(Axis.X)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Y, () -> this.setEditingAxis(Axis.Y)).active(active).category(category);
         this.keys().register(Keys.TRANSFORMATIONS_Z, () -> this.setEditingAxis(Axis.Z)).active(active).category(category);
@@ -461,7 +432,12 @@ public class UIPropTransform extends UITransform
         {
             this.toggleLocal();
             UIUtils.playClick();
-        }).category(category);
+        }).strict().active(enabled).category(category);
+
+        if (this.supportsMirror())
+        {
+            this.keys().register(Keys.TRANSFORMATIONS_MIRROR_EDIT, this::toggleMirrorEdit).active(enabled).category(category);
+        }
 
         return this;
     }
@@ -2686,35 +2662,6 @@ public class UIPropTransform extends UITransform
         else rotation.rotateZ(rad);
     }
 
-    /**
-     * In the delta spaces (LOCAL, WORLD) the translate trackpads feed deltas
-     * ({@link UITrackpad#relative}), which move along the space's axis instead
-     * of setting the channel; PARENT keeps the plain absolute channel edit.
-     */
-    @Override
-    protected void internalSetT(double x, Axis axis)
-    {
-        if (this.getSpace() == TransformSpace.PARENT)
-        {
-            super.internalSetT(x, axis);
-
-            return;
-        }
-
-        if (this.transform == null)
-        {
-            return;
-        }
-
-        Vector3f offset = this.spaceTranslateDir(axis).mul((float) x);
-
-        this.setT(null,
-            this.transform.translate.x + offset.x,
-            this.transform.translate.y + offset.y,
-            this.transform.translate.z + offset.z
-        );
-    }
-
     /* Blender-style snapping: every gesture is free by default and snaps to the
      * configured step only while Ctrl is held. Typed numeric input is exact
      * already, so it never snaps. */
@@ -3023,27 +2970,6 @@ public class UIPropTransform extends UITransform
                 this.lastX = context.mouseX;
                 this.lastY = context.mouseY;
             }
-        }
-
-        /* The space is shared between every transform panel: when another one
-         * (or the hotkey) switches it, this panel follows — landing back in
-         * PARENT also pins the delta-drifted fields to the canonical values. */
-        TransformSpace currentSpace = this.getSpace();
-
-        if (currentSpace != this.uiSpace)
-        {
-            if (currentSpace == TransformSpace.PARENT && this.transform != null)
-            {
-                this.fillT(this.transform.translate.x, this.transform.translate.y, this.transform.translate.z);
-            }
-
-            this.uiSpace = currentSpace;
-            this.updateLocalUI();
-        }
-
-        if (currentSpace != TransformSpace.PARENT && this.transform != null)
-        {
-            this.syncLocalTranslateFields();
         }
 
         if (this.spacesBarBackground)
