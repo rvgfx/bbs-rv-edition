@@ -1513,7 +1513,7 @@ public class UIClips extends UIElement
                 UIMarkerPanel panel = new UIMarkerPanel();
 
                 panel.fill(film.markers, this.draggedMarker);
-                UIOverlay.addOverlay(context, panel, 220, 420);
+                UIOverlay.addOverlay(context, panel, 220, 220);
             }
             else
             {

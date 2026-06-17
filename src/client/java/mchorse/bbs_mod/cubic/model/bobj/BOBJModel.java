@@ -222,9 +222,9 @@ public class BOBJModel implements IModel
     public Collection<String> getRootGroupKeys()
     {
         return this.armature.orderedBones.stream()
-            .filter((b) -> b.parent.isEmpty())
-            .map((b) -> b.name)
-            .toList();
+                .filter((b) -> b.parent.isEmpty())
+                .map((b) -> b.name)
+                .toList();
     }
 
     @Override
