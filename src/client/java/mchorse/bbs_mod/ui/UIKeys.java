@@ -1190,6 +1190,13 @@ public class UIKeys
     public static final IKey VIDEO_SETTINGS_SWAP = L10n.lang("bbs.ui.video_settings.swap");
     public static final IKey VIDEO_SETTINGS_WIDTH = L10n.lang("bbs.ui.video_settings.width");
     public static final IKey WORLD_KEYS_CYCLE_PANELS = L10n.lang("bbs.ui.world.keys.cycle_panels");
+    public static final IKey TIMELINE_MARKER_TITLE    = L10n.lang("bbs.ui.timeline_marker.title");
+    public static final IKey TIMELINE_MARKER_LABEL    = L10n.lang("bbs.ui.timeline_marker.label");
+    public static final IKey TIMELINE_MARKER_TICK     = L10n.lang("bbs.ui.timeline_marker.tick");
+    public static final IKey TIMELINE_MARKER_DURATION = L10n.lang("bbs.ui.timeline_marker.duration");
+    public static final IKey TIMELINE_MARKER_COLOR    = L10n.lang("bbs.ui.timeline_marker.color");
+    public static final IKey TIMELINE_MARKER_ADD      = L10n.lang("bbs.ui.timeline_marker.add");
+    public static final IKey TIMELINE_MARKER_ADD_KEYBIND = L10n.lang("bbs.ui.timeline_marker.add_keybind");
 
     /* Key collections */
     public static final KeyCollection C_CLIP = new KeyCollection("bbs.ui.camera.clips.^")

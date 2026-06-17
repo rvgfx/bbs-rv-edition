@@ -681,7 +681,22 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
-        ClientLifecycleEvents.CLIENT_STOPPING.register((e) -> BBSResources.stopWatchdog());
+        ClientLifecycleEvents.CLIENT_STOPPING.register((e) ->
+        {
+            BBSResources.stopWatchdog();
+
+            /* Save the currently open film before the game closes */
+            if (getDashboardIfCreated() != null)
+            {
+                UIFilmPanel filmPanel = getDashboard().getPanel(UIFilmPanel.class);
+
+                if (filmPanel != null && filmPanel.getData() != null)
+                {
+                    filmPanel.forceSave();
+                }
+            }
+        });
+
         ClientLifecycleEvents.CLIENT_STARTED.register((e) ->
         {
             BBSRendering.setupFramebuffer();

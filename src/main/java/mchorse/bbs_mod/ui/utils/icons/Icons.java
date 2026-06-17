@@ -9,6 +9,7 @@ public class Icons
 {
     public static final Map<String, Icon> ICONS = new HashMap<>();
     public static final Link ATLAS = Link.assets("textures/icons.png");
+    public static final Link TIMELINEMARKER = Link.assets("textures/timeline_marker.png");
 
     public static final Icon NONE = new Icon(null, "none", 0, 0);
 
@@ -232,6 +233,7 @@ public class Icons
     public static final Icon CHECKBOARD = register(new Icon(ATLAS, "checkboard", 0, 240));
     public static final Icon DISABLED = register(new Icon(ATLAS, "disabled", 16, 240));
     public static final Icon CURSOR = register(new Icon(ATLAS, "cursor", 32, 240));
+    public static final Icon TIMELINE_MARKER = register(new Icon(ATLAS,"timeline_marker",80, 160));
 
     public static final Icon MOUSE_BODY = new Icon(ATLAS, "mouse_body", 241, 237, 14, 18);
     public static final Icon MOUSE_LMB = new Icon(ATLAS, "mouse_lmb", 242, 229, 6, 7);

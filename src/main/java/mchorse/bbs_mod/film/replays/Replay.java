@@ -14,6 +14,7 @@ import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.film.markers.FilmMarkers;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.Clips;
 import net.minecraft.entity.LivingEntity;
@@ -44,6 +45,7 @@ public class Replay extends ValueGroup
     public final ValuePoint relativeOffset = new ValuePoint("relativeOffset", new Point(0, 0, 0));
 
     public final ValueBoolean axesPreview = new ValueBoolean("axes_preview", false);
+    public final FilmMarkers markers = new FilmMarkers("markers");
     public final ValueString axesPreviewBone = new ValueString("axes_preview_bone", "");
 
     public Replay(String id)
@@ -70,6 +72,7 @@ public class Replay extends ValueGroup
 
         this.add(this.axesPreview);
         this.add(this.axesPreviewBone);
+        this.add(this.markers);
     }
 
     /**

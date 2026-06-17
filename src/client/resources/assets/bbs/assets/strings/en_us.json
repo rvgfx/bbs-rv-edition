@@ -1632,5 +1632,12 @@
 	"studio.ui.utility.reload_terrain": "Terrain",
 	"studio.ui.utility.reload_textures": "Textures",
 	"studio.ui.utility.resize": "Resize window",
-	"studio.ui.utility.title": "Utility panel"
+	"studio.ui.utility.title": "Utility panel",
+	"bbs.ui.timeline_marker.title": "Edit Marker",
+	"bbs.ui.timeline_marker.label": "Label",
+	"bbs.ui.timeline_marker.tick": "Tick",
+	"bbs.ui.timeline_marker.duration": "Duration",
+	"bbs.ui.timeline_marker.color": "Color (RGB)",
+	"bbs.ui.timeline_marker.add": "Add Marker Here",
+	"bbs.ui.timeline_marker.add_keybind": "Add Marker at Cursor"
 }
