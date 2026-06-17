@@ -468,7 +468,7 @@ public class ClientNetwork
     }
 
     /* API */
-
+    
     public static void sendModelBlockForm(BlockPos pos, ModelBlockEntity modelBlock)
     {
         crusher.send(MinecraftClient.getInstance().player, ServerNetwork.SERVER_MODEL_BLOCK_FORM_PACKET, modelBlock.getProperties().toData(), (packetByteBuf) ->

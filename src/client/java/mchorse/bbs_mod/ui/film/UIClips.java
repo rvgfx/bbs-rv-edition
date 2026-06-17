@@ -15,6 +15,7 @@ import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.graphics.window.Window;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.resources.Link;
+import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.Keys;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.clips.renderer.IUIClipRenderer;
@@ -54,6 +55,12 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import mchorse.bbs_mod.film.markers.FilmMarker;
+import mchorse.bbs_mod.film.markers.FilmMarkers;
+import mchorse.bbs_mod.ui.film.markers.UIMarkerPanel;
+import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
+import mchorse.bbs_mod.ui.utils.renderers.TimelineMarkerRenderer;
 
 public class UIClips extends UIElement
 {
@@ -110,6 +117,8 @@ public class UIClips extends UIElement
     private List<Clip> otherClips = Collections.emptyList();
     private Set<Integer> snappingPoints = new HashSet<>();
     private List<Vector3i> grabbedData = new ArrayList<>();
+    private FilmMarker draggedMarker;
+    private int draggedMarkerInitialX;
 
     private UICopyPasteController copyPasteController;
 
@@ -172,6 +181,17 @@ public class UIClips extends UIElement
             }
 
             menu.action(Icons.ADD, UIKeys.CAMERA_TIMELINE_CONTEXT_ADD, () -> this.showAdds(mouseX, mouseY));
+            int markerTick = this.fromGraphX(mouseX);
+
+            menu.action(Icons.CURSOR, UIKeys.TIMELINE_MARKER_ADD, () ->
+            {
+                Film film = this.delegate.getFilm();
+
+                if (film != null)
+                {
+                    BaseValue.edit(film.markers, (m) -> m.addMarker(markerTick));
+                }
+            });
 
             if (hasSelected)
             {
@@ -244,6 +264,15 @@ public class UIClips extends UIElement
             clip.envelope.fadeOut.set((float) tick);
             this.delegate.fillData();
         }).category(KEYS_CATEGORY).active(canUseKeybindsSelected);
+        this.keys().register(Keys.ADD_MARKER, () ->
+        {
+            Film film = this.delegate.getFilm();
+
+            if (film != null)
+            {
+                BaseValue.edit(film.markers, (m) -> m.addMarker(this.delegate.getCursor()));
+            }
+        }).category(KEYS_CATEGORY).active(canUseKeybinds);
     }
 
     public UIClipRenderers getRenderers()
@@ -1216,6 +1245,32 @@ public class UIClips extends UIElement
             Clip original = this.delegate.getClip();
             Clip clip = this.clips.getClipAt(tick, layerIndex);
 
+            int rulerBottom = TimelineRulerRenderer.getRulerBottom(this.area);
+
+            if (mouseY <= rulerBottom)
+            {
+                Film film = this.delegate.getFilm();
+
+                if (film != null)
+                {
+                    FilmMarker hit = TimelineMarkerRenderer.pick(
+                            film.markers,
+                            this::toGraphX,
+                            mouseX,
+                            mouseY,
+                            this.area.y
+                    );
+
+                    if (hit != null)
+                    {
+                        this.draggedMarker = hit;
+                        this.draggedMarkerInitialX = mouseX;
+
+                        return true;
+                    }
+                }
+            }
+
             if (clip != null)
             {
                 if (clip != original)
@@ -1275,6 +1330,21 @@ public class UIClips extends UIElement
                 {
                     this.snappingPoints.add(otherClip.tick.get());
                     this.snappingPoints.add(otherClip.tick.get() + otherClip.duration.get());
+                }
+
+                Film film = this.delegate.getFilm();
+
+                if (film != null)
+                {
+                    for (FilmMarker marker : film.markers.getList())
+                    {
+                        this.snappingPoints.add(marker.tick.get());
+
+                        if (marker.duration.get() > 0)
+                        {
+                            this.snappingPoints.add(marker.tick.get() + marker.duration.get());
+                        }
+                    }
                 }
 
                 this.setMouse(mouseX, mouseY);
@@ -1434,6 +1504,31 @@ public class UIClips extends UIElement
             return super.subMouseReleased(context);
         }
 
+        if (this.draggedMarker != null)
+        {
+            if (Math.abs(context.mouseX - this.draggedMarkerInitialX) <= 2)
+            {
+                Film film = this.delegate.getFilm();
+
+                UIMarkerPanel panel = new UIMarkerPanel();
+
+                panel.fill(film.markers, this.draggedMarker);
+                UIOverlay.addOverlay(context, panel, 220, 420);
+            }
+            else
+            {
+                Film film = this.delegate.getFilm();
+
+                if (film != null)
+                {
+                    film.markers.preNotify();
+                    film.markers.postNotify();
+                }
+            }
+
+            this.draggedMarker = null;
+        }
+
         this.vertical.mouseReleased(context);
 
         if (this.selecting)
@@ -1512,6 +1607,12 @@ public class UIClips extends UIElement
 
             selection.setPoints(this.lastX, this.lastY, mouseX, mouseY);
             this.captureSelection(selection);
+        }
+        else if (this.draggedMarker != null)
+        {
+            int tick = Math.max(0, this.fromGraphX(mouseX));
+
+            this.draggedMarker.tick.set(tick);
         }
         else if (this.grabbing)
         {
@@ -1919,13 +2020,31 @@ public class UIClips extends UIElement
         int duration = this.clips.calculateDuration();
 
         TimelineRulerRenderer.render(
-            context,
-            this.area,
-            start,
-            duration,
-            this::toGraphX,
-            TimeUtils::formatTime
+                context,
+                this.area,
+                start,
+                duration,
+                this::toGraphX,
+                TimeUtils::formatTime
         );
+
+        Film film = this.delegate.getFilm();
+
+        if (film != null && !film.markers.getList().isEmpty())
+        {
+            int rulerBottom = TimelineRulerRenderer.getRulerBottom(this.area);
+
+            TimelineMarkerRenderer.render(
+                    context,
+                    this.area,
+                    this.area.y,
+                    rulerBottom,
+                    film.markers,
+                    this::toGraphX,
+                    context.mouseX,
+                    context.mouseY
+            );
+        }
     }
 
     /**

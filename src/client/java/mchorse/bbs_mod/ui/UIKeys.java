@@ -349,6 +349,7 @@ public class UIKeys
     public static final IKey FILM_REPLAY_TAB_2 = L10n.lang("bbs.ui.film.replay.tab.2");
     public static final IKey FILM_REPLAY_TAB_3 = L10n.lang("bbs.ui.film.replay.tab.3");
     public static final IKey FILM_REPLAY_TAB_4 = L10n.lang("bbs.ui.film.replay.tab.4");
+    public static final IKey FILM_REPLAY_TAB_5 = L10n.lang("bbs.ui.film.replay.tab.5");
     public static final IKey FILM_REPLAY_TITLE = L10n.lang("bbs.ui.film.replay.title");
     public static final IKey FILM_REPLAY_ACTIONS_TIMELINE = L10n.lang("bbs.ui.film.replays.actions_timeline");
     public static final IKey FILM_RESET_REPLAYS = L10n.lang("bbs.ui.film.reset_replays");
@@ -516,6 +517,7 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_TITLE = L10n.lang("bbs.ui.forms.editors.vanilla_particle.title");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_VELOCITY = L10n.lang("bbs.ui.forms.editors.vanilla_particle.velocity");
     public static final IKey FORMS_EDITORS_VANILLA_PARTICLE_VERTICAL = L10n.lang("bbs.ui.forms.editors.vanilla_particle.vertical");
+    public static final IKey FORMS_EDITOR_BODY_PART_GIZMO = L10n.lang("bbs.ui.forms.editor.body_part_gizmo");
     public static final IKey FORMS_EDITOR_BONE = L10n.lang("bbs.ui.forms.editor.bone");
     public static final IKey FORMS_EDITOR_CONTEXT_ADD = L10n.lang("bbs.ui.forms.editor.context.add");
     public static final IKey FORMS_EDITOR_CONTEXT_COPY = L10n.lang("bbs.ui.forms.editor.context.copy");
@@ -1188,6 +1190,13 @@ public class UIKeys
     public static final IKey VIDEO_SETTINGS_SWAP = L10n.lang("bbs.ui.video_settings.swap");
     public static final IKey VIDEO_SETTINGS_WIDTH = L10n.lang("bbs.ui.video_settings.width");
     public static final IKey WORLD_KEYS_CYCLE_PANELS = L10n.lang("bbs.ui.world.keys.cycle_panels");
+    public static final IKey TIMELINE_MARKER_TITLE    = L10n.lang("bbs.ui.timeline_marker.title");
+    public static final IKey TIMELINE_MARKER_LABEL    = L10n.lang("bbs.ui.timeline_marker.label");
+    public static final IKey TIMELINE_MARKER_TICK     = L10n.lang("bbs.ui.timeline_marker.tick");
+    public static final IKey TIMELINE_MARKER_DURATION = L10n.lang("bbs.ui.timeline_marker.duration");
+    public static final IKey TIMELINE_MARKER_COLOR    = L10n.lang("bbs.ui.timeline_marker.color");
+    public static final IKey TIMELINE_MARKER_ADD      = L10n.lang("bbs.ui.timeline_marker.add");
+    public static final IKey TIMELINE_MARKER_ADD_KEYBIND = L10n.lang("bbs.ui.timeline_marker.add_keybind");
 
     /* Key collections */
     public static final KeyCollection C_CLIP = new KeyCollection("bbs.ui.camera.clips.^")
