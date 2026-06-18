@@ -41,6 +41,7 @@ public class VideoRecorder
     private int textureWidth;
     private int textureHeight;
     private int counter;
+    private AmbientAudioCapture ambientCapture;
 
     public int serverTicks;
     public int lastServerTicks;
@@ -66,7 +67,7 @@ public class VideoRecorder
     /**
      * Start recording the video using ffmpeg
      */
-    public void startRecording(File audioFile, int textureId, int width, int height)
+    public void startRecording(File audioFile, int textureId, int width, int height, boolean ambientAudio)
     {
         if (this.recording)
         {
@@ -83,6 +84,25 @@ public class VideoRecorder
         if (this.buffer == null)
         {
             this.buffer = MemoryUtil.memAlloc(size);
+        }
+
+        if (ambientAudio)
+        {
+            try
+            {
+                int fps = BBSSettings.videoFrameRate.get();
+                String baseName = StringUtils.createTimestampFilename();
+
+                this.ambientCapture = AmbientAudioCapture.open(
+                        BBSRendering.getVideoFolder().toPath(),
+                        baseName,
+                        fps
+                );
+            }
+            catch (IOException e)
+            {
+                this.ambientCapture = null;
+            }
         }
 
         try
@@ -219,6 +239,20 @@ public class VideoRecorder
             }
         }
 
+        if (this.ambientCapture != null)
+        {
+            try
+            {
+                this.ambientCapture.close();
+            }
+            catch (IOException e)
+            {
+                /* log silently */
+            }
+
+            this.ambientCapture = null;
+        }
+
         this.pbos = null;
         this.textureId = -1;
 
@@ -285,6 +319,11 @@ public class VideoRecorder
         if (!this.recording)
         {
             return;
+        }
+
+        if (this.ambientCapture != null)
+        {
+            this.ambientCapture.captureFrame();
         }
 
         if (OS.CURRENT == OS.MACOS)
@@ -363,7 +402,7 @@ public class VideoRecorder
     /**
      * Toggle recording of the video
      */
-    public void toggleRecording(int textureId, int textureWidth, int textureHeight)
+    public void toggleRecording(int textureId, int textureWidth, int textureHeight, boolean ambientAudio)
     {
         if (this.recording)
         {
@@ -371,7 +410,7 @@ public class VideoRecorder
         }
         else
         {
-            this.startRecording(null, textureId, textureWidth, textureHeight);
+            this.startRecording(null, textureId, textureWidth, textureHeight, ambientAudio);
         }
 
         UIUtils.playClick();

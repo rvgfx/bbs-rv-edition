@@ -16,6 +16,7 @@ import mchorse.bbs_mod.ui.framework.elements.overlay.UIMessageOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import mchorse.bbs_mod.utils.LoopbackAudioController;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.VideoRecorder;
 import mchorse.bbs_mod.utils.clips.Clips;
@@ -202,9 +203,17 @@ public class UIFilmRecorder extends UIElement
             return;
         }
 
+        boolean ambientAudio = BBSSettings.audioEnvironment.get();
+
+        if (ambientAudio)
+        {
+            LoopbackAudioController.requestCapture(true);
+            LoopbackAudioController.suppressFilmClipPlayback(true);
+        }
+
         try
         {
-            recorder.startRecording(this.pendingAudioFile, this.pendingTextureId, this.pendingWidth, this.pendingHeight);
+            recorder.startRecording(this.pendingAudioFile, this.pendingTextureId, this.pendingWidth, this.pendingHeight, ambientAudio);
         }
         catch (Exception e)
         {
@@ -223,6 +232,9 @@ public class UIFilmRecorder extends UIElement
         UIContext context = this.getUIContext();
 
         context.render.postRunnable(this.exit::removeFromParent);
+
+        LoopbackAudioController.requestCapture(false);
+        LoopbackAudioController.suppressFilmClipPlayback(false);
 
         this.preparing = false;
         this.startRecordingAtMs = 0L;

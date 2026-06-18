@@ -889,7 +889,7 @@ public class BBSModClient implements ClientModInitializer
 
         if (delayMs <= 0L)
         {
-            videoRecorder.startRecording(null, BBSRendering.getTexture().id, width, height);
+            videoRecorder.startRecording(null, BBSRendering.getTexture().id, width, height, BBSSettings.audioEnvironment.get());
             BBSRendering.setCustomSize(videoRecorder.isRecording(), width, height);
 
             return false;
@@ -902,7 +902,6 @@ public class BBSModClient implements ClientModInitializer
         pendingVideoExportWidth = width;
         pendingVideoExportHeight = height;
 
-        /* Keep export resolution during warmup so first captured frame is already settled. */
         BBSRendering.setCustomSize(true, width, height);
 
         return true;
@@ -941,7 +940,7 @@ public class BBSModClient implements ClientModInitializer
             this.resumePlayFilmAndRecordAfterDelay();
         }
 
-        videoRecorder.startRecording(null, BBSRendering.getTexture().id, width, height);
+        videoRecorder.startRecording(null, BBSRendering.getTexture().id, width, height, BBSSettings.audioEnvironment.get());
         BBSRendering.setCustomSize(videoRecorder.isRecording(), width, height);
     }
 
