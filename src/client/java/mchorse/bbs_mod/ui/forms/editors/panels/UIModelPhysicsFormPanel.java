@@ -387,7 +387,7 @@ public class UIModelPhysicsFormPanel extends UIFormPanel<ModelForm>
         else
         {
             List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-            if (BBSSettings.disabledBonesEnabled.get()) bones.removeIf(model.disabledBones::contains);
+            bones.removeIf(model.disabledBones::contains);
             this.availableBones = bones;
 
             this.setElementsEnabled(true);

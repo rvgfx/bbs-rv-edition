@@ -58,6 +58,7 @@ public class BBSSettings {
 	public static ValueBoolean transformHotkeys3dRay;
 	public static ValueBoolean poseMirrorEdit;
 	public static ValueBoolean poseAlternateInvert;
+	public static ValueBoolean poseShowDisabledBones;
 	public static ValueOrder translateHotkeyOrder;
 	public static ValueOrder scaleHotkeyOrder;
 	public static ValueOrder rotateHotkeyOrder;
@@ -94,6 +95,7 @@ public class BBSSettings {
 	public static ValueBoolean videoLimitFrameRate;
 	public static ValueString videoExportPath;
 	public static ValueBoolean videoExportAudio;
+	public static ValueBoolean audioEnvironment;
 	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
 	public static ValueInt videoHeldFrames;
@@ -146,7 +148,6 @@ public class BBSSettings {
 	public static ValueBoolean renderAllModelBlocks;
 	public static ValueBoolean clickModelBlocks;
 	public static ValueInt setPlayStateDistance;
-	public static ValueBoolean disabledBonesEnabled;
 
 	public static ValueString entitySelectorsPropertyWhitelist;
 
@@ -477,6 +478,7 @@ public class BBSSettings {
 		poseMirrorEdit.invisible();
 		poseAlternateInvert = builder.getBoolean("pose_alternate_invert", false);
 		poseAlternateInvert.invisible();
+		poseShowDisabledBones = builder.getBoolean("pose_show_disabled_bones", false);
 		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
 		builder.register(translateHotkeyOrder);
 		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");
@@ -522,6 +524,7 @@ public class BBSSettings {
 		videoLimitFrameRate = builder.getBoolean("limit_frame_rate", false);
 		videoExportPath = builder.getString("export_path", "");
 		videoExportAudio = builder.getBoolean("audio", false);
+		audioEnvironment = builder.getBoolean("audio_environment", false);
 		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
 		videoHeldFrames = builder.getInt("held_frames", 1, 1, 1000);
@@ -576,7 +579,6 @@ public class BBSSettings {
 		renderAllModelBlocks = builder.getBoolean("render_all", true);
 		clickModelBlocks = builder.getBoolean("click", true);
 		setPlayStateDistance = builder.getInt("play_state_distance", 64);
-		disabledBonesEnabled = builder.getBoolean("disabled_bones", true);
 
 		builder.category("entity_selectors", Icons.POINTER);
 		entitySelectorsPropertyWhitelist = builder.getString("whitelist", "CustomName,Name");
