@@ -41,12 +41,12 @@ final class IKSolver
     {
     }
 
-    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance)
+    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance)
     {
-        return solve(positions, target, applyPole, polePoint, softness, maxIterations, tolerance, null, null);
+        return solve(positions, target, applyPole, polePoint, poleAngle, softness, maxIterations, tolerance, null, null, null);
     }
 
-    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation)
+    public static List<Vector3f> solve(List<Vector3f> positions, Vector3f target, boolean applyPole, Vector3f polePoint, float poleAngle, float softness, int maxIterations, float tolerance, Limit[] limits, Quaternionf rootParentRotation, Vector3f restHinge)
     {
         int n = positions.size();
 
@@ -69,21 +69,52 @@ final class IKSolver
 
         Vector3f root = new Vector3f(positions.get(0));
         Vector3f goal = clampReach(root, target, total, softness);
-        Vector3f hinge = applyPole ? captureHingeAxis(positions) : null;
+
+        /* Bend direction. A two-bone limb follows the live posed bend when it is
+         * actually bent, else falls back to the chain's authored REST bend (knee
+         * forward, elbow back) carried into this frame — so a limb solved from a
+         * straight FK pose still bends the way the model was built, no pole needed.
+         * Longer chains (tails, ropes) keep the old pole-gated hinge: they have no
+         * single bend plane to enforce. The pole, when present, overrides either. */
+        Vector3f hinge;
+
+        if (n == 3)
+        {
+            /* Live posed bend if the limb is bent, else the authored rest bend, else
+             * a stable side axis — so the bend plane always exists (poleAngle has a
+             * reference to roll from) and the bend never lands on an arbitrary side
+             * when the model and pose are both straight. */
+            hinge = liveBendNormal(positions);
+
+            if (hinge == null)
+            {
+                hinge = restHinge;
+            }
+
+            if (hinge == null)
+            {
+                Vector3f limb = new Vector3f(positions.get(2)).sub(positions.get(0));
+                hinge = normalize(limb) ? sideAxis(limb) : null;
+            }
+        }
+        else
+        {
+            hinge = applyPole ? captureHingeAxis(positions) : null;
+        }
 
         boolean constrained = limits != null && rootParentRotation != null;
 
-        /* The pole only AIMS the bend (where the elbow points) — it never rolls the
-         * chain about its own axis. Rolling the whole chain (geometry included) is
-         * the controller bone's job: rotate the IK target and the renderer rolls
-         * the chain to match (see ModelIKApplier.controllerRoll). */
+        /* The solve is POSITION-level: it places the joints (the pole aims the elbow).
+         * The bend plane it produces — its normal — is what rolls the chain: the cubic
+         * orientation pass reads that normal and orients each bone to it (see
+         * ModelIKApplier.buildChainOrientations), so swing and roll come from one place. */
         if (n == 3)
         {
             /* Analytic is ideal for a two-bone limb — full reach, no flip, clean
              * pole control. The pole defines the hinge; limits ride on top as
              * range clamps (e.g. stop the elbow hyperextending). */
             solveTwoBone(positions, root, goal);
-            orientBend(positions, hinge, polePoint);
+            orientBend(positions, hinge, polePoint, poleAngle);
 
             if (constrained)
             {
@@ -96,7 +127,7 @@ final class IKSolver
              * pole re-aims the bend about root->tip — that preserves every joint's
              * local rotation, so it can't break the limits. */
             solveCCD(positions, root, goal, maxIterations, tolerance, limits, rootParentRotation);
-            orientBend(positions, hinge, polePoint);
+            orientBend(positions, hinge, polePoint, poleAngle);
         }
         else
         {
@@ -107,7 +138,7 @@ final class IKSolver
              * frame. FABRIK distributes the bend evenly and lands on the same
              * shape for the same input — a rope drapes instead of coiling. */
             solveFabrik(positions, root, goal, maxIterations, tolerance);
-            orientBend(positions, hinge, polePoint);
+            orientBend(positions, hinge, polePoint, poleAngle);
         }
 
         return positions;
@@ -596,12 +627,13 @@ final class IKSolver
      * pole target (the elbow points at a stable external reference, so it can't
      * flip as the target swings), otherwise at {@code axis x hinge} — the bend
      * direction matching the captured hinge so the limb behaves like a hinge and
-     * never inverts. POSITION-level only: it moves where the elbow points, it does
-     * NOT roll the chain about its own axis (that is the controller bone's job, see
-     * ModelIKApplier.controllerRoll). The root and tip lie on the axis, so reach is
-     * preserved.
+     * never inverts. POSITION-level only: it moves where the elbow points, setting the
+     * bend plane the cubic orientation pass then rolls each bone to. The root and tip
+     * lie on the axis, so reach is preserved. {@code poleAngle} (radians) then rolls
+     * that aimed bend about the limb axis — Blender's pole angle, an offset baked into
+     * the elbow position, so it is stable (no twist singularity).
      */
-    private static void orientBend(List<Vector3f> p, Vector3f hinge, Vector3f polePoint)
+    private static void orientBend(List<Vector3f> p, Vector3f hinge, Vector3f polePoint, float poleAngle)
     {
         int n = p.size();
 
@@ -649,6 +681,14 @@ final class IKSolver
             return;
         }
 
+        /* Pole angle: roll the aimed bend about the limb axis. desired is already
+         * perpendicular to axis and rotating about axis keeps it so, so orientBendTo's
+         * signed angle stays valid. Applies to the pole and auto-hinge bends alike. */
+        if (poleAngle != 0F)
+        {
+            new Quaternionf().fromAxisAngleRad(axis.x, axis.y, axis.z, poleAngle).transform(desired);
+        }
+
         orientBendTo(p, root, axis, desired);
     }
 
@@ -690,9 +730,28 @@ final class IKSolver
      */
     private static Vector3f captureHingeAxis(List<Vector3f> p)
     {
-        int n = p.size();
+        Vector3f normal = liveBendNormal(p);
 
-        if (n < 3)
+        if (normal != null)
+        {
+            return normal;
+        }
+
+        /* Straight limb: derive a stable side axis from the limb direction. */
+        Vector3f limb = new Vector3f(p.get(p.size() - 1)).sub(p.get(0));
+
+        return normalize(limb) ? sideAxis(limb) : null;
+    }
+
+    /**
+     * The normal of the limb's posed bend plane, {@code (elbow-root) x (tip-root)}
+     * — the side the limb is currently bent towards. Null when the limb is straight
+     * (no posed plane), letting the caller fall back to the authored rest bend or a
+     * fixed side axis.
+     */
+    private static Vector3f liveBendNormal(List<Vector3f> p)
+    {
+        if (p.size() < 3)
         {
             return null;
         }
@@ -700,15 +759,7 @@ final class IKSolver
         Vector3f a = p.get(0);
         Vector3f normal = new Vector3f(p.get(1)).sub(a).cross(new Vector3f(p.get(2)).sub(a));
 
-        if (normalize(normal))
-        {
-            return normal;
-        }
-
-        /* Straight limb: derive a stable side axis from the limb direction. */
-        Vector3f limb = new Vector3f(p.get(n - 1)).sub(a);
-
-        return normalize(limb) ? sideAxis(limb) : null;
+        return normalize(normal) ? normal : null;
     }
 
     /**
