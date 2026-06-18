@@ -1607,8 +1607,6 @@
 	"keybinds.config.transformations.tooltip": "Keybinds that are available when editing pose in film editor's form keyframe panel",
 	"keybinds.config.world.title": "World",
 	"keybinds.config.world.tooltip": "Keybinds that are available in world menu",
-	"bbs.config.model_blocks.disabled_bones": "Disabled bones",
-	"bbs.config.model_blocks.disabled_bones-comment": "Whether bones marked as disabled in a model's config.json should be hidden from pose/keyframe editors",
 	"studio.ui.language.editor.context.copy_key": "Copy key",
 	"studio.ui.language.editor.context.copy_original": "Copy original",
 	"studio.ui.language.editor.context.mark_completed": "Mark as no translation needed",

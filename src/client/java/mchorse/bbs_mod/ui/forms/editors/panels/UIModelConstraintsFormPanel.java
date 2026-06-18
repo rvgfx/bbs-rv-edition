@@ -148,7 +148,7 @@ public class UIModelConstraintsFormPanel extends UIFormPanel<ModelForm>
         }
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
-        if (BBSSettings.disabledBonesEnabled.get()) bones.removeIf(model.disabledBones::contains);
+        bones.removeIf(model.disabledBones::contains);
         this.availableBones = bones;
 
         this.bones.setList(bones);
