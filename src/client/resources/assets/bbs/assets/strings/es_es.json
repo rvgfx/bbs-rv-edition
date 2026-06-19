@@ -1056,5 +1056,7 @@
     "studio.ui.utility.reload_terrain": "Terreno",
     "studio.ui.utility.reload_textures": "Texturas",
     "studio.ui.utility.resize": "Cambiar tamaño de ventana",
-    "studio.ui.utility.title": "Panel de utilidades"
+    "studio.ui.utility.title": "Panel de utilidades",
+    "bbs.config.video.audio_environment": "Exportar ambiente de juego",
+    "bbs.config.video.audio_environment-tooltip": "Graba los sonidos del mundo de Minecraft durante la exportación y los mezcla en el video final"
 }

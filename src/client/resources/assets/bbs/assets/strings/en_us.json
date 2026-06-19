@@ -1646,5 +1646,7 @@
 	"bbs.ui.timeline_marker.duration": "Duration",
 	"bbs.ui.timeline_marker.color": "Color (RGB)",
 	"bbs.ui.timeline_marker.add": "Add Marker Here",
-	"bbs.ui.timeline_marker.add_keybind": "Add Marker at Cursor"
+	"bbs.ui.timeline_marker.add_keybind": "Add Marker at Cursor",
+	"bbs.config.video.audio_environment": "Export game ambient audio",
+	"bbs.config.video.audio_environment-comment": "Record Minecraft world sounds during export and mix them into the final video"
 }

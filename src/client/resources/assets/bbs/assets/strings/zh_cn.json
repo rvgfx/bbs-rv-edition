@@ -1163,5 +1163,7 @@
     "studio.ui.utility.reload_terrain": "地形",
     "studio.ui.utility.reload_textures": "纹理",
     "studio.ui.utility.resize": "调整窗口大小",
-    "studio.ui.utility.title": "实用工具面板"
+    "studio.ui.utility.title": "实用工具面板",
+    "bbs.config.video.audio_environment": "导出游戏环境音",
+    "bbs.config.video.audio_environment-tooltip": "导出期间录制 Minecraft 世界声音并将其混入最终视频"
 }
