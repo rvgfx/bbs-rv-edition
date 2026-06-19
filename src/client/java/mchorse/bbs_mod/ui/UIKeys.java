@@ -1196,6 +1196,8 @@ public class UIKeys
     public static final IKey VIDEO_SETTINGS_RESOLUTION = L10n.lang("bbs.ui.video_settings.resolution");
     public static final IKey VIDEO_SETTINGS_SWAP = L10n.lang("bbs.ui.video_settings.swap");
     public static final IKey VIDEO_SETTINGS_WIDTH = L10n.lang("bbs.ui.video_settings.width");
+    public static final IKey VIDEO_SETTINGS_AUDIO_ENVIRONMENT = L10n.lang("bbs.ui.video_settings.audio_environment");
+    public static final IKey VIDEO_SETTINGS_AUDIO_ENVIRONMENT_TOOLTIP = L10n.lang("bbs.ui.video_settings.audio_environment-tooltip");
     public static final IKey WORLD_KEYS_CYCLE_PANELS = L10n.lang("bbs.ui.world.keys.cycle_panels");
     public static final IKey TIMELINE_MARKER_TITLE    = L10n.lang("bbs.ui.timeline_marker.title");
     public static final IKey TIMELINE_MARKER_LABEL    = L10n.lang("bbs.ui.timeline_marker.label");
