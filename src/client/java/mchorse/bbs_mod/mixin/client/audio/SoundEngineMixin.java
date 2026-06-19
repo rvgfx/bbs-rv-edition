@@ -32,7 +32,6 @@ public class SoundEngineMixin
     private void bbs$init(String deviceSpecifier, boolean directionalAudio, CallbackInfo ci)
     {
         this.bbs$usingLoopbackDevice = LoopbackAudioController.isCaptureRequested();
-        System.out.println("[BBS Mixin] SoundEngine.init() called, captureRequested=" + this.bbs$usingLoopbackDevice);
 
         if (!this.bbs$usingLoopbackDevice)
         {
