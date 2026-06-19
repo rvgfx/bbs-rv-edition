@@ -207,8 +207,10 @@ public class UIFilmRecorder extends UIElement
 
         if (ambientAudio)
         {
+            System.out.println("[BBS] requestCapture(true) antes do reload");
             LoopbackAudioController.requestCapture(true);
             LoopbackAudioController.suppressFilmClipPlayback(true);
+            System.out.println("[BBS] device apos reload = " + LoopbackAudioController.getLoopbackDevice());
         }
 
         try

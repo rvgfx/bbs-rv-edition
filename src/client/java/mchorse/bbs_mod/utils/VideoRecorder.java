@@ -67,6 +67,44 @@ public class VideoRecorder
     /**
      * Start recording the video using ffmpeg
      */
+
+    private void enableAmbientCapture(int frameRate) throws IOException
+    {
+        MinecraftClient.getInstance().getSoundManager().stopAll();
+        BBSModClient.getSounds().deleteSounds();
+        LoopbackAudioController.requestCapture(true);
+        MinecraftClient.getInstance().getSoundManager().reloadSounds();
+        MinecraftClient.getInstance().getSoundManager().stopAll();
+
+        this.ambientCapture = AmbientAudioCapture.open(BBSRendering.getVideoFolder().toPath(), StringUtils.createTimestampFilename(), frameRate);
+    }
+
+    private void disableAmbientCapture()
+    {
+        try
+        {
+            if (this.ambientCapture != null)
+            {
+                this.ambientCapture.close();
+            }
+        }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+        finally
+        {
+            this.ambientCapture = null;
+            LoopbackAudioController.requestCapture(false);
+            LoopbackAudioController.setLoopbackDevice(0L);
+
+            MinecraftClient.getInstance().getSoundManager().stopAll();
+            MinecraftClient.getInstance().getSoundManager().reloadSounds();
+            MinecraftClient.getInstance().getSoundManager().stopAll();
+            BBSModClient.getSounds().deleteSounds();
+        }
+    }
+
     public void startRecording(File audioFile, int textureId, int width, int height, boolean ambientAudio)
     {
         if (this.recording)
@@ -90,14 +128,7 @@ public class VideoRecorder
         {
             try
             {
-                int fps = BBSSettings.videoFrameRate.get();
-                String baseName = StringUtils.createTimestampFilename();
-
-                this.ambientCapture = AmbientAudioCapture.open(
-                        BBSRendering.getVideoFolder().toPath(),
-                        baseName,
-                        fps
-                );
+                this.enableAmbientCapture(BBSSettings.videoFrameRate.get());
             }
             catch (IOException e)
             {
@@ -241,16 +272,7 @@ public class VideoRecorder
 
         if (this.ambientCapture != null)
         {
-            try
-            {
-                this.ambientCapture.close();
-            }
-            catch (IOException e)
-            {
-                /* log silently */
-            }
-
-            this.ambientCapture = null;
+            this.disableAmbientCapture();
         }
 
         this.pbos = null;
