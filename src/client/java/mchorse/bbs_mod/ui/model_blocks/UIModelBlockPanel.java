@@ -370,45 +370,20 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
         this.gizmoCamera.view.set(stack.peek().getPositionMatrix());
         this.gizmoCamera.position.set(cameraPos.x, cameraPos.y, cameraPos.z);
 
+        /* Match the visual gizmo's on-screen size compensation (see
+         * Gizmo#setViewportScale) so the pick handles line up with what is drawn.
+         * The block gizmo fills the whole screen, so this is ~1, but it is set
+         * explicitly so a switch from a smaller-preview editor cannot leak in. */
+        UIContext uiContext = this.getContext();
+
+        if (uiContext != null)
+        {
+            Gizmo.INSTANCE.setViewportScale(uiContext.menu.height / (float) this.getGizmoArea().h);
+        }
+
         this.renderGizmoStencil(stack, cameraPos, mc);
 
         RenderSystem.enableDepthTest();
-    }
-
-    /**
-     * Draw the visual gizmo for {@code entity} from the block entity renderer,
-     * right after the model itself. The panel's own {@link #renderInWorld} runs
-     * on {@code AFTER_ENTITIES}, before the model block flushes, so a gizmo drawn
-     * there ends up behind the model — the model's renderer is the only place
-     * that reliably paints on top of it (the same spot the plain axes used).
-     * Picking still happens in {@link #renderGizmoStencil} at the same origin,
-     * so the handles stay aligned with the cursor.
-     *
-     * <p>The matrices must sit at the block's centred origin
-     * ({@code block + (0.5, 0, 0.5)}, camera-relative).
-     */
-    public void renderWorldGizmo(MatrixStack matrices, ModelBlockEntity entity)
-    {
-        if (!this.isShowingGizmo(entity))
-        {
-            return;
-        }
-
-        Transform transform = entity.getProperties().getTransform();
-
-        matrices.push();
-        matrices.translate(transform.translate.x, transform.translate.y, transform.translate.z);
-
-        if (this.transform.isLocal())
-        {
-            MatrixStackUtils.multiply(matrices, new Matrix4f().set(transform.createRotationMatrix()));
-        }
-
-        RenderSystem.disableDepthTest();
-        Gizmo.INSTANCE.render(matrices);
-        RenderSystem.enableDepthTest();
-
-        matrices.pop();
     }
 
     /**
@@ -633,6 +608,7 @@ public class UIModelBlockPanel extends UIDashboardPanel implements IFlightSuppor
     {
         if (this.canShowGizmo())
         {
+            this.gizmo.renderGizmo(context);
             this.gizmo.update(context);
         }
 
