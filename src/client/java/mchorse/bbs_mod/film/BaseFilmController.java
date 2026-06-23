@@ -200,9 +200,13 @@ public abstract class BaseFilmController
             renderAnchorGizmo(entities, entity, target, defaultMatrix, cx, cy, cz, transition, context.anchorSpace, context.map, stack);
         }
 
-        if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F)
+        if (!relative && context.map == null && opacity > 0F && context.shadowRadius > 0F && form.visible.get())
         {
-            /* Place the shadow under the replay's perceived position: shift the actual shadow position
+            /* Skip the shadow when the form is hidden (form.visible, animatable via keyframes): the form
+             * itself renders nothing then - see FormRenderer.render - so its shadow must vanish too.
+             * The animated value is live here, applied to form.visible in startRenderFrame this frame.
+             *
+             * Place the shadow under the replay's perceived position: shift the actual shadow position
              * by how far the model (form transform + anchor-bone root motion) has moved from rest,
              * mapped from form-local into world axes via the render target. Moving the position itself
              * (not just translating the quad) makes the shadow's ground projection and shading match. */
@@ -274,7 +278,9 @@ public abstract class BaseFilmController
 
             if (stencilMap == null)
             {
-                Gizmo.INSTANCE.render(stack);
+                /* The visual is drawn later, in the panel's UI pass (see
+                 * Gizmo#renderInterface) — here we only snapshot its placement. */
+                Gizmo.INSTANCE.captureVisual(stack);
             }
             else
             {
@@ -371,7 +377,9 @@ public abstract class BaseFilmController
 
         if (stencilMap == null)
         {
-            Gizmo.INSTANCE.render(stack);
+            /* The visual is drawn later, in the panel's UI pass (see
+             * Gizmo#renderInterface) — here we only snapshot its placement. */
+            Gizmo.INSTANCE.captureVisual(stack);
         }
         else
         {
@@ -854,6 +862,7 @@ public abstract class BaseFilmController
                             double y = replay.keyframes.y.interpolate(ticks);
                             double z = replay.keyframes.z.interpolate(ticks);
                             boolean sneaking = replay.keyframes.sneaking.interpolate(ticks) > 0;
+                            boolean grounded = replay.keyframes.grounded.interpolate(ticks) > 0;
 
                             Vec3d pos = player.getPos();
 
@@ -861,7 +870,19 @@ public abstract class BaseFilmController
                             player.setPosition(x, y, z);
 
                             player.setSneaking(sneaking);
-                            player.setOnGround(replay.keyframes.grounded.interpolate(ticks) > 0);
+                            player.setOnGround(grounded);
+
+                            /* First person teleports the player from keyframes instead of walking it, so vanilla's
+                             * stride distance (the view-bobbing amplitude) is computed from a zero velocity and stays
+                             * flat. Re-derive it from the actual per-tick displacement (the same source as the limb
+                             * animation) with vanilla's own easing. prevStrideDistance already holds last tick's value
+                             * (snapshotted by the player tick), so only the current one is advanced — keeping the bob
+                             * smooth between frames. */
+                            float dx = (float) (player.getX() - player.prevX);
+                            float dz = (float) (player.getZ() - player.prevZ);
+                            float stride = grounded ? Math.min(0.1F, (float) Math.sqrt(dx * dx + dz * dz)) : 0F;
+
+                            player.strideDistance = player.prevStrideDistance + (stride - player.prevStrideDistance) * 0.4F;
 
                             if (player instanceof ClientPlayerEntityAccessor accessor)
                             {
