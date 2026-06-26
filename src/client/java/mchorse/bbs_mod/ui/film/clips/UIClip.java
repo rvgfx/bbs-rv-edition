@@ -52,11 +52,13 @@ import mchorse.bbs_mod.ui.framework.elements.UISection;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.ui.utils.ScrollDirection;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.utils.TimeUtilsClient;
 import mchorse.bbs_mod.utils.clips.Clip;
+import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.undo.IUndo;
 
 import java.util.HashMap;
@@ -97,6 +99,7 @@ public abstract class UIClip <T extends Clip> extends UIElement
         register(RemapperClip.class, UIRemapperClip::new);
         register(AudioClientClip.class, UIAudioClip::new);
         register(SubtitleClip.class, UISubtitleClip::new);
+        register(HotbarClip.class, UIHotbarClip::new);
         register(CurveClientClip.class, UICurveClip::new);
         register(DollyZoomClip.class, UIDollyZoomClip::new);
 
@@ -140,6 +143,11 @@ public abstract class UIClip <T extends Clip> extends UIElement
         IUIClipFactory factory = FACTORIES.get(clip.getClass());
 
         return factory == null ? null : factory.create(clip, delegate);
+    }
+
+    public static UILabel label(IKey key)
+    {
+        return UI.label(key).background(() -> BBSSettings.primaryColor(Colors.A50));
     }
 
     public UIClip(T clip, IUIClipsDelegate editor)
