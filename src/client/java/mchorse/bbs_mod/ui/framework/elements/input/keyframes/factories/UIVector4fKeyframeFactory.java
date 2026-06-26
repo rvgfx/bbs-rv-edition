@@ -1,6 +1,7 @@
 package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -37,5 +38,12 @@ public class UIVector4fKeyframeFactory extends UIKeyframeFactory<Vector4f>
             (float) this.x.getValue(), (float) this.y.getValue(),
             (float) this.z.getValue(), (float) this.w.getValue()
         );
+    }
+
+    private boolean isHotbarLayout(UIKeyframes editor, Keyframe<Vector4f> keyframe)
+    {
+        UIKeyframeSheet sheet = editor.getGraph().getSheet(keyframe);
+
+        return sheet != null && "layout".equals(sheet.id);
     }
 }
