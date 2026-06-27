@@ -365,6 +365,7 @@ public class UIKeys
     public static final IKey FILM_REPLAY_TAB_5 = L10n.lang("bbs.ui.film.replay.tab.5");
     public static final IKey FILM_REPLAY_TITLE = L10n.lang("bbs.ui.film.replay.title");
     public static final IKey FILM_REPLAY_ACTIONS_TIMELINE = L10n.lang("bbs.ui.film.replays.actions_timeline");
+    public static final IKey FILM_REPLAY_ALL_TRACKS = L10n.lang("bbs.ui.film.replays.all_tracks");
     public static final IKey FILM_RESET_REPLAYS = L10n.lang("bbs.ui.film.reset_replays");
     public static final IKey FILM_SCREENSHOT = L10n.lang("bbs.ui.film.screenshot");
     public static final IKey FILM_SCREENSHOT_DESCRIPTION = L10n.lang("bbs.ui.film.screenshot-description");
@@ -499,6 +500,12 @@ public class UIKeys
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_ITERATIONS = L10n.lang("bbs.ui.forms.editors.model.physics.iterations");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_COLLISIONS = L10n.lang("bbs.ui.forms.editors.model.physics.collisions");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_RADIUS = L10n.lang("bbs.ui.forms.editors.model.physics.radius");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND = L10n.lang("bbs.ui.forms.editors.model.physics.wind");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH = L10n.lang("bbs.ui.forms.editors.model.physics.wind_strength");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION = L10n.lang("bbs.ui.forms.editors.model.physics.wind_direction");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_speed");
+    public static final IKey FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE = L10n.lang("bbs.ui.forms.editors.model.physics.wind_turbulence_scale");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVE_ERROR = L10n.lang("bbs.ui.forms.editors.model.physics.save_error");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_SAVED = L10n.lang("bbs.ui.forms.editors.model.physics.saved");
     public static final IKey FORMS_EDITORS_MODEL_PHYSICS_INVALID_CHAIN = L10n.lang("bbs.ui.forms.editors.model.physics.invalid_chain");
