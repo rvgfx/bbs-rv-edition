@@ -146,21 +146,21 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
 
 
 
-        this.x1 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos1.set(v.floatValue(), this.triggerBlock.pos1.get().y, this.triggerBlock.pos1.get().z); this.save(); } }).limit(0, 1).increment(0.1);
-        this.y1 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos1.set(this.triggerBlock.pos1.get().x, v.floatValue(), this.triggerBlock.pos1.get().z); this.save(); } }).limit(0, 1).increment(0.1);
-        this.z1 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos1.set(this.triggerBlock.pos1.get().x, this.triggerBlock.pos1.get().y, v.floatValue()); this.save(); } }).limit(0, 1).increment(0.1);
+        this.x1 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos1.set(new Vector3f(v.floatValue(), this.triggerBlock.pos1.get().y, this.triggerBlock.pos1.get().z)); this.save(); } }).limit(0, 1).increment(0.1);
+        this.y1 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos1.set(new Vector3f(this.triggerBlock.pos1.get().x, v.floatValue(), this.triggerBlock.pos1.get().z)); this.save(); } }).limit(0, 1).increment(0.1);
+        this.z1 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos1.set(new Vector3f(this.triggerBlock.pos1.get().x, this.triggerBlock.pos1.get().y, v.floatValue())); this.save(); } }).limit(0, 1).increment(0.1);
 
-        this.x2 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos2.set(v.floatValue(), this.triggerBlock.pos2.get().y, this.triggerBlock.pos2.get().z); this.save(); } }).limit(0, 1).increment(0.1);
-        this.y2 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos2.set(this.triggerBlock.pos2.get().x, v.floatValue(), this.triggerBlock.pos2.get().z); this.save(); } }).limit(0, 1).increment(0.1);
-        this.z2 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos2.set(this.triggerBlock.pos2.get().x, this.triggerBlock.pos2.get().y, v.floatValue()); this.save(); } }).limit(0, 1).increment(0.1);
+        this.x2 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos2.set(new Vector3f(v.floatValue(), this.triggerBlock.pos2.get().y, this.triggerBlock.pos2.get().z)); this.save(); } }).limit(0, 1).increment(0.1);
+        this.y2 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos2.set(new Vector3f(this.triggerBlock.pos2.get().x, v.floatValue(), this.triggerBlock.pos2.get().z)); this.save(); } }).limit(0, 1).increment(0.1);
+        this.z2 = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.pos2.set(new Vector3f(this.triggerBlock.pos2.get().x, this.triggerBlock.pos2.get().y, v.floatValue())); this.save(); } }).limit(0, 1).increment(0.1);
 
-        this.ox = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionOffset.set(v.floatValue(), this.triggerBlock.regionOffset.get().y, this.triggerBlock.regionOffset.get().z); this.save(); } }).increment(0.1);
-        this.oy = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionOffset.set(this.triggerBlock.regionOffset.get().x, v.floatValue(), this.triggerBlock.regionOffset.get().z); this.save(); } }).increment(0.1);
-        this.oz = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionOffset.set(this.triggerBlock.regionOffset.get().x, this.triggerBlock.regionOffset.get().y, v.floatValue()); this.save(); } }).increment(0.1);
+        this.ox = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionOffset.set(new Vector3f(v.floatValue(), this.triggerBlock.regionOffset.get().y, this.triggerBlock.regionOffset.get().z)); this.save(); } }).increment(0.1);
+        this.oy = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionOffset.set(new Vector3f(this.triggerBlock.regionOffset.get().x, v.floatValue(), this.triggerBlock.regionOffset.get().z)); this.save(); } }).increment(0.1);
+        this.oz = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionOffset.set(new Vector3f(this.triggerBlock.regionOffset.get().x, this.triggerBlock.regionOffset.get().y, v.floatValue())); this.save(); } }).increment(0.1);
 
-        this.sx = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionSize.set(v.floatValue(), this.triggerBlock.regionSize.get().y, this.triggerBlock.regionSize.get().z); this.save(); } }).increment(0.1);
-        this.sy = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionSize.set(this.triggerBlock.regionSize.get().x, v.floatValue(), this.triggerBlock.regionSize.get().z); this.save(); } }).increment(0.1);
-        this.sz = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionSize.set(this.triggerBlock.regionSize.get().x, this.triggerBlock.regionSize.get().y, v.floatValue()); this.save(); } }).increment(0.1);
+        this.sx = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionSize.set(new Vector3f(v.floatValue(), this.triggerBlock.regionSize.get().y, this.triggerBlock.regionSize.get().z)); this.save(); } }).increment(0.1);
+        this.sy = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionSize.set(new Vector3f(this.triggerBlock.regionSize.get().x, v.floatValue(), this.triggerBlock.regionSize.get().z)); this.save(); } }).increment(0.1);
+        this.sz = new UITrackpad((v) -> { if (this.triggerBlock != null) { this.triggerBlock.regionSize.set(new Vector3f(this.triggerBlock.regionSize.get().x, this.triggerBlock.regionSize.get().y, v.floatValue())); this.save(); } }).increment(0.1);
 
         this.x1.textbox.setColor(Colors.RED);
         this.y1.textbox.setColor(Colors.GREEN);
