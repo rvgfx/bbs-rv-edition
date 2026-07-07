@@ -1,9 +1,12 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
+import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.DepthTestFunction;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.platform.CompareOp;
+import com.mojang.blaze3d.vertex.*;
+import mchorse.bbs_mod.obj.Mesh;
+import org.lwjgl.opengl.GL11;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.BBSSettings;
@@ -14,19 +17,14 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.utils.colors.Colors;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.ScreenRect;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BuiltBuffer;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.RenderSetup;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.texture.TextureSetup;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.gui.render.TextureSetup;
+import net.minecraft.resources.Identifier;
 import org.joml.Matrix3x2fc;
 
 import java.util.List;
@@ -38,18 +36,18 @@ import java.util.function.Supplier;
  * Ported to 1.21.11. Three big changes from 1.21.1:
  *
  * <ul>
- *   <li>The GUI is now 2D-transform based: {@link DrawContext#getMatrices()} returns an
+ *   <li>The GUI is now 2D-transform based: {@link GuiGraphicsExtractor#getMatrices()} returns an
  *       {@link org.joml.Matrix3x2fStack} (not a 4x4 {@code MatrixStack}). The position-only vertex
  *       calls take a {@link Matrix3x2fc}; z is always 0 in the GUI.</li>
  *   <li>{@code RenderSystem.setShader(...)} / {@code BufferRenderer.drawWithGlobalProgram(...)} are
- *       gone. The GUI is two-phase/deferred: {@code DrawContext} accumulates a
+ *       gone. The GUI is two-phase/deferred: {@code GuiGraphicsExtractor} accumulates a
  *       {@link net.minecraft.client.gui.render.state.GuiRenderState} that vanilla composites AFTER
  *       {@code Screen.render} returns. A self-issued {@code RenderLayer.draw} mid-frame would target
  *       a different (un-composited) state, so solid rectangles and gradients now route through the
  *       managed {@code context.fill}/{@code context.fillGradient} path, and text through
- *       {@code context.drawText}. The batcher's {@code DrawContext} is swapped to vanilla's live
+ *       {@code context.drawText}. The batcher's {@code GuiGraphicsExtractor} is swapped to vanilla's live
  *       per-frame context by {@code UIScreen.render} (see {@link #setContext}).</li>
- *   <li>{@code DrawContext.draw()} no longer exists (the two-phase GUI flushes deferred draws by
+ *   <li>{@code GuiGraphicsExtractor.draw()} no longer exists (the two-phase GUI flushes deferred draws by
  *       itself), and {@code RenderSystem.depthFunc(...)} is gone — both calls were removed.</li>
  * </ul>
  *
@@ -77,15 +75,15 @@ public class Batcher2D
      * by the batcher. Seeded from the vanilla GUI position-color snippet so the GUI projection /
      * transform UBO is supplied. */
     private static final RenderPipeline GUI_QUADS = RenderPipelines.register(
-        guiColorBuilder("gui_color_quads", VertexFormat.DrawMode.QUADS).build()
+        guiColorBuilder("gui_color_quads", PrimitiveTopology.QUADS).build()
     );
 
     private static final RenderPipeline GUI_TRIANGLES = RenderPipelines.register(
-        guiColorBuilder("gui_color_triangles", VertexFormat.DrawMode.TRIANGLES).build()
+        guiColorBuilder("gui_color_triangles", PrimitiveTopology.TRIANGLES).build()
     );
 
     private static final RenderPipeline GUI_TRIANGLE_FAN = RenderPipelines.register(
-        guiColorBuilder("gui_color_triangle_fan", VertexFormat.DrawMode.TRIANGLE_FAN).build()
+        guiColorBuilder("gui_color_triangle_fan", PrimitiveTopology.TRIANGLE_FAN).build()
     );
 
     private static RenderLayer guiQuadsLayer;
@@ -94,17 +92,19 @@ public class Batcher2D
 
     private static FontRenderer fontRenderer = new FontRenderer();
 
-    private DrawContext context;
+    private GuiGraphicsExtractor context;
     private FontRenderer font;
 
-    private static RenderPipeline.Builder guiColorBuilder(String name, VertexFormat.DrawMode mode)
+    private static RenderPipeline.Builder guiColorBuilder(String name, PrimitiveTopology mode)
     {
-        return RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
-            .withLocation(net.minecraft.util.Identifier.of(BBSMod.MOD_ID, "pipeline/" + name))
-            .withVertexFormat(VertexFormats.POSITION_COLOR, mode)
-            .withBlend(BLEND)
-            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
-            .withCull(false);
+        return RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+                .withLocation(net.minecraft.resources.Identifier.fromNamespaceAndPath(BBSMod.MOD_ID, "pipeline/" + name))
+                .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
+                .withPrimitiveTopology(mode)
+                .withColorTargetState(new com.mojang.blaze3d.pipeline.ColorTargetState(BLEND))
+                // Replaced the broken enum with the GL11 constant
+                .withDepthStencilState(new com.mojang.blaze3d.pipeline.DepthStencilState(CompareOp.ALWAYS_PASS, false))
+                .withCull(false);
     }
 
     private static RenderLayer layer(RenderPipeline pipeline, String name, RenderLayer cached)
@@ -135,7 +135,7 @@ public class Batcher2D
     /** Finish a buffer and submit it through the given layer (no-op on an empty buffer). */
     private static void flush(BufferBuilder builder, RenderLayer renderLayer)
     {
-        BuiltBuffer built = builder.endNullable();
+        MeshData built = builder.getClass();
 
         if (built != null)
         {
@@ -145,29 +145,29 @@ public class Batcher2D
 
     public static FontRenderer getDefaultTextRenderer()
     {
-        fontRenderer.setRenderer(MinecraftClient.getInstance().textRenderer);
+        fontRenderer.setRenderer(Minecraft.getInstance().font);
 
         return fontRenderer;
     }
 
-    public Batcher2D(DrawContext context)
+    public Batcher2D(GuiGraphicsExtractor context)
     {
         this.context = context;
         this.font = getDefaultTextRenderer();
     }
 
-    public DrawContext getContext()
+    public GuiGraphicsExtractor getContext()
     {
         return this.context;
     }
 
     /**
-     * Swap in the live per-frame vanilla {@link DrawContext}. The 1.21.6+ GUI is two-phase: vanilla
+     * Swap in the live per-frame vanilla {@link GuiGraphicsExtractor}. The 1.21.6+ GUI is two-phase: vanilla
      * only composites the {@link net.minecraft.client.gui.render.state.GuiRenderState} that belongs
-     * to the {@code DrawContext} it passes into {@code Screen.render}. The batcher must therefore draw
+     * to the {@code GuiGraphicsExtractor} it passes into {@code Screen.render}. The batcher must therefore draw
      * into that exact context each frame (set by {@code UIScreen.render}) or nothing is composited.
      */
-    public void setContext(DrawContext context)
+    public void setContext(GuiGraphicsExtractor context)
     {
         this.context = context;
     }
@@ -188,16 +188,16 @@ public class Batcher2D
 
         /* Read the live GUI scissor directly (same as LineBuilder) so the mesh clips in lock-step with
          * context.fill, without a separate mirror to keep in sync. */
-        ScreenRect scissor = this.context.scissorStack.peekLast();
-        ScreenRect bounds = mesh.computeBounds(scissor);
+        ScreenRectangle scissor = this.context.scissorStack.peek();
+        ScreenRectangle bounds = mesh.computeBounds(scissor);
 
         if (bounds == null)
         {
             return;
         }
 
-        this.context.state.addSimpleElement(new GuiQuadMesh.State(
-            RenderPipelines.GUI, TextureSetup.empty(),
+        this.context.guiRenderState.addGuiElement(new GuiQuadMesh.State(
+            RenderPipelines.GUI, TextureSetup.noTexture(),
             mesh.xs(), mesh.ys(), mesh.colors(), mesh.count(),
             scissor, bounds));
     }
@@ -246,11 +246,11 @@ public class Batcher2D
      *
      * <p>The incoming rect is already in final screen space: the context overload globalises it via
      * {@code context.globalX/globalY} (subtracting the scroll shift S once), and the raw-coordinate
-     * callers pass an already-absolute rect. On 1.21.1 {@code DrawContext.enableScissor} pushed this
+     * callers pass an already-absolute rect. On 1.21.1 {@code GuiGraphicsExtractor.enableScissor} pushed this
      * rect verbatim, so it was the correct scissor.</p>
      *
-     * <p>On 1.21.11 {@code DrawContext.enableScissor} additionally transforms the rect by the live GUI
-     * matrix pose ({@code ScreenRect.transform(matrices)}) before pushing it. That pose carries the
+     * <p>On 1.21.11 {@code GuiGraphicsExtractor.enableScissor} additionally transforms the rect by the live GUI
+     * matrix pose ({@code ScreenRectangle.transform(matrices)}) before pushing it. That pose carries the
      * scroll translate (UIContext.shiftY does {@code getMatrices().translate(0, -S)}), so the rect would
      * be shifted by the scroll a SECOND time — landing at y - 2S while the geometry (drawn through the
      * same pose) lands at y - S. As you scroll down the scissor drifts up and crops the bottom of
@@ -341,10 +341,10 @@ public class Batcher2D
         /* c1 ---- c2
          * |        |
          * c3 ---- c4 */
-        builder.vertex(matrix, x, y).color(color1);
-        builder.vertex(matrix, x, y + h).color(color3);
-        builder.vertex(matrix, x + w, y + h).color(color4);
-        builder.vertex(matrix, x + w, y).color(color2);
+        builder.addVertex(matrix, x, y).color(color1);
+        builder.addVertex(matrix, x, y + h).color(color3);
+        builder.addVertex(matrix, x + w, y + h).color(color4);
+        builder.addVertex(matrix, x + w, y).color(color2);
     }
 
     public void bevelBox(int x1, int y1, int x2, int y2, int fill, boolean shadow, boolean border)
@@ -633,12 +633,12 @@ public class Batcher2D
 
     private void fillTexturedBox(BufferBuilder builder, Matrix3x2fc matrix, int color, float x, float y, float w, float h, float u1, float v1, float u2, float v2, int textureW, int textureH)
     {
-        builder.vertex(matrix, x, y + h).texture(u1 / (float) textureW, v2 / (float) textureH).color(color);
-        builder.vertex(matrix, x + w, y + h).texture(u2 / (float) textureW, v2 / (float) textureH).color(color);
-        builder.vertex(matrix, x + w, y).texture(u2 / (float) textureW, v1 / (float) textureH).color(color);
-        builder.vertex(matrix, x, y + h).texture(u1 / (float) textureW, v2 / (float) textureH).color(color);
-        builder.vertex(matrix, x + w, y).texture(u2 / (float) textureW, v1 / (float) textureH).color(color);
-        builder.vertex(matrix, x, y).texture(u1 / (float) textureW, v1 / (float) textureH).color(color);
+        builder.addVertex(matrix, x, y + h).texture(u1 / (float) textureW, v2 / (float) textureH).color(color);
+        builder.addVertex(matrix, x + w, y + h).texture(u2 / (float) textureW, v2 / (float) textureH).color(color);
+        builder.addVertex(matrix, x + w, y).texture(u2 / (float) textureW, v1 / (float) textureH).color(color);
+        builder.addVertex(matrix, x, y + h).texture(u1 / (float) textureW, v2 / (float) textureH).color(color);
+        builder.addVertex(matrix, x + w, y).texture(u2 / (float) textureW, v1 / (float) textureH).color(color);
+        builder.addVertex(matrix, x, y).texture(u1 / (float) textureW, v1 / (float) textureH).color(color);
     }
 
     /* Repeatable textured box */
@@ -706,7 +706,7 @@ public class Batcher2D
             color = Colors.opaque(color);
         }
 
-        this.context.drawText(this.font.getRenderer(), label, (int) x, (int) y, color, shadow);
+        this.context.text(this.font.getRenderer(), label, (int) x, (int) y, color, shadow);
     }
 
     /* Text helpers */
@@ -780,7 +780,7 @@ public class Batcher2D
 
     public void flush()
     {
-        /* TODO(1.21.11 render): DrawContext.draw() was removed in the 1.21.6 two-phase GUI; the
+        /* TODO(1.21.11 render): GuiGraphicsExtractor.draw() was removed in the 1.21.6 two-phase GUI; the
          * engine flushes deferred GUI draws itself. Kept as a no-op for source compatibility. */
     }
 }

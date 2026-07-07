@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.network;
 
+import io.netty.buffer.Unpooled;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.actions.ActionState;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
@@ -27,7 +28,6 @@ import mchorse.bbs_mod.ui.morphing.UIMorphingPanel;
 import mchorse.bbs_mod.utils.DataPath;
 import mchorse.bbs_mod.utils.repos.RepositoryOperation;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.command.permission.PermissionPredicate;
@@ -417,7 +417,7 @@ public class ClientNetwork
     }
 
     /* API */
-    
+
     public static void sendModelBlockForm(BlockPos pos, ModelBlockEntity modelBlock)
     {
         crusher.send(MinecraftClient.getInstance().player, ServerNetwork.SERVER_MODEL_BLOCK_FORM_PACKET, modelBlock.getProperties().toData(), (packetByteBuf) ->
@@ -469,7 +469,7 @@ public class ClientNetwork
 
     public static void sendActionRecording(String filmId, int replayId, int tick, int countdown, boolean state)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeString(filmId);
         buf.writeInt(replayId);
@@ -482,7 +482,7 @@ public class ClientNetwork
 
     public static void sendToggleFilm(String filmId, boolean withCamera)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeString(filmId);
         buf.writeBoolean(withCamera);
@@ -492,7 +492,7 @@ public class ClientNetwork
 
     public static void sendActionState(String filmId, ActionState state, int tick)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeString(filmId);
         buf.writeByte(state.ordinal());
@@ -524,7 +524,7 @@ public class ClientNetwork
 
     public static void sendTeleport(double x, double y, double z, float yaw, float bodyYaw, float pitch)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeDouble(x);
         buf.writeDouble(y);
@@ -538,7 +538,7 @@ public class ClientNetwork
 
     public static void sendFormTrigger(String triggerId, int type)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeString(triggerId);
         buf.writeInt(type);
@@ -558,7 +558,7 @@ public class ClientNetwork
 
     public static void sendZoom(boolean zoom)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeBoolean(zoom);
 
@@ -567,7 +567,7 @@ public class ClientNetwork
 
     public static void sendPauseFilm(String filmId)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeString(filmId);
 
@@ -576,7 +576,7 @@ public class ClientNetwork
 
     public static void sendApplyFilmPlayerSettingsToPlayer(Film film)
     {
-        PacketByteBuf buf = PacketByteBufs.create();
+        PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
 
         buf.writeFloat(film.hp.get());
         buf.writeFloat(film.hunger.get());

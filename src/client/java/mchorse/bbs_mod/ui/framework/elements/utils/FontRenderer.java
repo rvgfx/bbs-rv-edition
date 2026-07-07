@@ -1,8 +1,8 @@
 package mchorse.bbs_mod.ui.framework.elements.utils;
 
-import net.minecraft.client.font.TextRenderer;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.Font;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 
 import java.util.List;
 import java.util.Objects;
@@ -10,11 +10,11 @@ import java.util.stream.Collectors;
 
 public class FontRenderer
 {
-    private TextRenderer renderer;
+    private Font renderer;
 
-    public static List<String> wrap(TextRenderer renderer, String string, int width)
+    public static List<String> wrap(Font renderer, String string, int width)
     {
-        return renderer.wrapLines(Text.literal(string), width).stream().map((ot) ->
+        return renderer.wrapLines(Component.literal(string), width).stream().map((ot) ->
         {
             StringBuilder builder = new StringBuilder();
             StyleHolder holder = new StyleHolder(Style.EMPTY);
@@ -75,12 +75,12 @@ public class FontRenderer
         if (style.isItalic()) b.append("\u00A7o");
     }
 
-    public void setRenderer(TextRenderer renderer)
+    public void setRenderer(Font renderer)
     {
         this.renderer = renderer;
     }
 
-    public TextRenderer getRenderer()
+    public Font getRenderer()
     {
         return this.renderer;
     }

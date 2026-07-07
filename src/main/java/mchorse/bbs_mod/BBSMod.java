@@ -85,38 +85,37 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.gamerule.v1.GameRuleBuilder;
-import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
+import net.fabricmc.fabric.api.creativetab.v1.FabricCreativeModeTab;
 import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.TypedEntityData;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.gamerules.GameRule;
+import net.minecraft.world.level.gamerules.GameRuleCategory;
+import net.minecraft.world.level.storage.LevelResource;
 import mchorse.bbs_mod.data.DataStorageUtils;
-import net.minecraft.block.AbstractBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.entity.BlockEntityType;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnGroup;
-import net.minecraft.entity.TypedEntityData;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemGroup;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.rule.GameRule;
-import net.minecraft.world.rule.GameRuleCategory;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -153,30 +152,30 @@ public class BBSMod implements ModInitializer
     private static MapFactory<Clip, ClipFactoryData> factoryActionClips;
 
     public static final EntityType<ActorEntity> ACTOR_ENTITY = Registry.register(
-        Registries.ENTITY_TYPE,
-        Identifier.of(MOD_ID, "actor"),
-        EntityType.Builder.create(ActorEntity::new, SpawnGroup.CREATURE)
-            .dimensions(0.6F, 1.8F)
-            .maxTrackingRange(16)
-            .trackingTickInterval(1)
-            .build(RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(MOD_ID, "actor"))));
+        BuiltInRegistries.ENTITY_TYPE,
+        Identifier.fromNamespaceAndPath(MOD_ID, "actor"),
+        EntityType.Builder.of(ActorEntity::new, MobCategory.CREATURE)
+            .sized(0.6F, 1.8F)
+            .clientTrackingRange(16)
+            .updateInterval(1)
+            .build(ResourceKey.create(Registries.ENTITY_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "actor"))));
 
     public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = Registry.register(
-        Registries.ENTITY_TYPE,
-        Identifier.of(MOD_ID, "gun_projectile"),
-        EntityType.Builder.create(GunProjectileEntity::new, SpawnGroup.CREATURE)
-            .dimensions(0.25F, 0.25F)
-            .maxTrackingRange(24)
-            .trackingTickInterval(1)
-            .build(RegistryKey.of(RegistryKeys.ENTITY_TYPE, Identifier.of(MOD_ID, "gun_projectile"))));
+        BuiltInRegistries.ENTITY_TYPE,
+        Identifier.fromNamespaceAndPath(MOD_ID, "gun_projectile"),
+        EntityType.Builder.of(GunProjectileEntity::new, MobCategory.CREATURE)
+            .sized(0.25F, 0.25F)
+            .clientTrackingRange(24)
+            .updateInterval(1)
+            .build(ResourceKey.create(Registries.ENTITY_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "gun_projectile"))));
 
-    public static final Block MODEL_BLOCK = new ModelBlock(AbstractBlock.Settings.create()
-        .registryKey(blockKey("model"))
-        .noBlockBreakParticles()
-        .dropsNothing()
+    public static final Block MODEL_BLOCK = new ModelBlock(BlockBehaviour.Properties.of()
+        .setId(blockKey("model"))
+        .noTerrainParticles()
+        .noLootTable()
         .noCollision()
-        .nonOpaque()
-        .notSolid()
+        .noOcclusion()
+        .forceSolidOff()
         .strength(0F));
     public static final Block CHROMA_RED_BLOCK = createChromaBlock("chroma_red");
     public static final Block CHROMA_GREEN_BLOCK = createChromaBlock("chroma_green");
@@ -187,80 +186,80 @@ public class BBSMod implements ModInitializer
     public static final Block CHROMA_BLACK_BLOCK = createChromaBlock("chroma_black");
     public static final Block CHROMA_WHITE_BLOCK = createChromaBlock("chroma_white");
 
-    public static final BlockItem MODEL_BLOCK_ITEM = new BlockItem(MODEL_BLOCK, new Item.Settings().registryKey(itemKey("model")));
-    public static final GunItem GUN_ITEM = new GunItem(new Item.Settings().registryKey(itemKey("gun")).maxCount(1));
-    public static final BlockItem CHROMA_RED_BLOCK_ITEM = new BlockItem(CHROMA_RED_BLOCK, new Item.Settings().registryKey(itemKey("chroma_red")));
-    public static final BlockItem CHROMA_GREEN_BLOCK_ITEM = new BlockItem(CHROMA_GREEN_BLOCK, new Item.Settings().registryKey(itemKey("chroma_green")));
-    public static final BlockItem CHROMA_BLUE_BLOCK_ITEM = new BlockItem(CHROMA_BLUE_BLOCK, new Item.Settings().registryKey(itemKey("chroma_blue")));
-    public static final BlockItem CHROMA_CYAN_BLOCK_ITEM = new BlockItem(CHROMA_CYAN_BLOCK, new Item.Settings().registryKey(itemKey("chroma_cyan")));
-    public static final BlockItem CHROMA_MAGENTA_BLOCK_ITEM = new BlockItem(CHROMA_MAGENTA_BLOCK, new Item.Settings().registryKey(itemKey("chroma_magenta")));
-    public static final BlockItem CHROMA_YELLOW_BLOCK_ITEM = new BlockItem(CHROMA_YELLOW_BLOCK, new Item.Settings().registryKey(itemKey("chroma_yellow")));
-    public static final BlockItem CHROMA_BLACK_BLOCK_ITEM = new BlockItem(CHROMA_BLACK_BLOCK, new Item.Settings().registryKey(itemKey("chroma_black")));
-    public static final BlockItem CHROMA_WHITE_BLOCK_ITEM = new BlockItem(CHROMA_WHITE_BLOCK, new Item.Settings().registryKey(itemKey("chroma_white")));
+    public static final BlockItem MODEL_BLOCK_ITEM = new BlockItem(MODEL_BLOCK, new Item.Properties().setId(itemKey("model")));
+    public static final GunItem GUN_ITEM = new GunItem(new Item.Properties().setId(itemKey("gun")).stacksTo(1));
+    public static final BlockItem CHROMA_RED_BLOCK_ITEM = new BlockItem(CHROMA_RED_BLOCK, new Item.Properties().setId(itemKey("chroma_red")));
+    public static final BlockItem CHROMA_GREEN_BLOCK_ITEM = new BlockItem(CHROMA_GREEN_BLOCK, new Item.Properties().setId(itemKey("chroma_green")));
+    public static final BlockItem CHROMA_BLUE_BLOCK_ITEM = new BlockItem(CHROMA_BLUE_BLOCK, new Item.Properties().setId(itemKey("chroma_blue")));
+    public static final BlockItem CHROMA_CYAN_BLOCK_ITEM = new BlockItem(CHROMA_CYAN_BLOCK, new Item.Properties().setId(itemKey("chroma_cyan")));
+    public static final BlockItem CHROMA_MAGENTA_BLOCK_ITEM = new BlockItem(CHROMA_MAGENTA_BLOCK, new Item.Properties().setId(itemKey("chroma_magenta")));
+    public static final BlockItem CHROMA_YELLOW_BLOCK_ITEM = new BlockItem(CHROMA_YELLOW_BLOCK, new Item.Properties().setId(itemKey("chroma_yellow")));
+    public static final BlockItem CHROMA_BLACK_BLOCK_ITEM = new BlockItem(CHROMA_BLACK_BLOCK, new Item.Properties().setId(itemKey("chroma_black")));
+    public static final BlockItem CHROMA_WHITE_BLOCK_ITEM = new BlockItem(CHROMA_WHITE_BLOCK, new Item.Properties().setId(itemKey("chroma_white")));
 
     public static final GameRule<Boolean> BBS_EDITING_RULE = GameRuleBuilder.forBoolean(true)
         .category(GameRuleCategory.MISC)
-        .buildAndRegister(Identifier.of(MOD_ID, "bbs_editing"));
+        .buildAndRegister(Identifier.fromNamespaceAndPath(MOD_ID, "bbs_editing"));
 
     public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = Registry.register(
-        Registries.BLOCK_ENTITY_TYPE,
-        Identifier.of(MOD_ID, "model_block_entity"),
+        BuiltInRegistries.BLOCK_ENTITY_TYPE,
+        Identifier.fromNamespaceAndPath(MOD_ID, "model_block_entity"),
         FabricBlockEntityTypeBuilder.create(ModelBlockEntity::new, MODEL_BLOCK).build()
     );
 
-    public static final ItemGroup ITEM_GROUP = FabricItemGroup.builder()
-        .icon(() -> createModelBlockStack(Link.assets("textures/icon.png")))
-        .displayName(Text.translatable("itemGroup.bbs.main"))
-        .entries((context, entries) ->
-        {
-            entries.add(createModelBlockStack(Link.assets("textures/model_block.png")));
-            entries.add(CHROMA_RED_BLOCK_ITEM);
-            entries.add(CHROMA_GREEN_BLOCK_ITEM);
-            entries.add(CHROMA_BLUE_BLOCK_ITEM);
-            entries.add(CHROMA_CYAN_BLOCK_ITEM);
-            entries.add(CHROMA_MAGENTA_BLOCK_ITEM);
-            entries.add(CHROMA_YELLOW_BLOCK_ITEM);
-            entries.add(CHROMA_BLACK_BLOCK_ITEM);
-            entries.add(CHROMA_WHITE_BLOCK_ITEM);
-            entries.add(new ItemStack(GUN_ITEM));
-        })
-        .build();
+    public static final CreativeModeTab ITEM_GROUP = FabricCreativeModeTab.builder()
+            .icon(() -> createModelBlockStack(Link.assets("textures/icon.png")))
+            .title(Component.translatable("itemGroup.bbs.main"))
+            .displayItems((context, entries) ->
+            {
+                entries.accept(createModelBlockStack(Link.assets("textures/model_block.png")));
+                entries.accept(CHROMA_RED_BLOCK_ITEM);
+                entries.accept(CHROMA_GREEN_BLOCK_ITEM);
+                entries.accept(CHROMA_BLUE_BLOCK_ITEM);
+                entries.accept(CHROMA_CYAN_BLOCK_ITEM);
+                entries.accept(CHROMA_MAGENTA_BLOCK_ITEM);
+                entries.accept(CHROMA_YELLOW_BLOCK_ITEM);
+                entries.accept(CHROMA_BLACK_BLOCK_ITEM);
+                entries.accept(CHROMA_WHITE_BLOCK_ITEM);
+                entries.accept(new ItemStack(GUN_ITEM));
+            })
+            .build();
 
     public static final SoundEvent CLICK = registerSound("click");
 
     private static SoundEvent registerSound(String path)
     {
-        Identifier id = Identifier.of(MOD_ID, path);
+        Identifier id = Identifier.fromNamespaceAndPath(MOD_ID, path);
 
-        return Registry.register(Registries.SOUND_EVENT, id, SoundEvent.of(id));
+        return Registry.register(BuiltInRegistries.SOUND_EVENT, id, SoundEvent.createVariableRangeEvent(id));
     }
 
     private static File worldFolder;
 
-    private static RegistryKey<Block> blockKey(String path)
+    private static ResourceKey<Block> blockKey(String path)
     {
-        return RegistryKey.of(RegistryKeys.BLOCK, Identifier.of(MOD_ID, path));
+        return ResourceKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, path));
     }
 
-    private static RegistryKey<Item> itemKey(String path)
+    private static ResourceKey<Item> itemKey(String path)
     {
-        return RegistryKey.of(RegistryKeys.ITEM, Identifier.of(MOD_ID, path));
+        return ResourceKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, path));
     }
 
     private static Block createChromaBlock(String path)
     {
-        return new Block(AbstractBlock.Settings.create()
-            .registryKey(blockKey(path))
-            .noBlockBreakParticles()
-            .dropsNothing()
-            .requiresTool()
+        return new Block(BlockBehaviour.Properties.of()
+            .setId(blockKey(path))
+            .noTerrainParticles()
+            .noLootTable()
+            .requiresCorrectToolForDrops()
             .strength(-1F, 3600000F));
     }
 
     private static ItemStack createModelBlockStack(Link texture)
     {
         ItemStack stack = new ItemStack(MODEL_BLOCK_ITEM);
-        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ORIGIN, MODEL_BLOCK.getDefaultState());
+        ModelBlockEntity entity = new ModelBlockEntity(BlockPos.ZERO, MODEL_BLOCK.defaultBlockState());
         BillboardForm form = new BillboardForm();
         ModelProperties properties = entity.getProperties();
 
@@ -269,11 +268,11 @@ public class BBSMod implements ModInitializer
         properties.setForm(form);
         properties.getTransformFirstPerson().translate.set(0F, 0F, -0.25F);
 
-        NbtCompound compound = new NbtCompound();
+        CompoundTag compound = new CompoundTag();
 
         DataStorageUtils.writeToNbtCompound(compound, "Properties", properties.toData());
 
-        stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, TypedEntityData.create(MODEL_BLOCK_ENTITY, compound));
+        stack.set(DataComponents.BLOCK_ENTITY_DATA, TypedEntityData.of(MODEL_BLOCK_ENTITY, compound));
 
         return stack;
     }
@@ -491,35 +490,35 @@ public class BBSMod implements ModInitializer
         FabricDefaultAttributeRegistry.register(ACTOR_ENTITY, ActorEntity.createActorAttributes());
 
         /* Blocks */
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "model"), MODEL_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_red"), CHROMA_RED_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_green"), CHROMA_GREEN_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_blue"), CHROMA_BLUE_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_cyan"), CHROMA_CYAN_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_magenta"), CHROMA_MAGENTA_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_yellow"), CHROMA_YELLOW_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_black"), CHROMA_BLACK_BLOCK);
-        Registry.register(Registries.BLOCK, Identifier.of(MOD_ID, "chroma_white"), CHROMA_WHITE_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "model"), MODEL_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_red"), CHROMA_RED_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_green"), CHROMA_GREEN_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_blue"), CHROMA_BLUE_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_cyan"), CHROMA_CYAN_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_magenta"), CHROMA_MAGENTA_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_yellow"), CHROMA_YELLOW_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_black"), CHROMA_BLACK_BLOCK);
+        Registry.register(BuiltInRegistries.BLOCK, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_white"), CHROMA_WHITE_BLOCK);
 
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "model"), MODEL_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "gun"), GUN_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_red"), CHROMA_RED_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_green"), CHROMA_GREEN_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_blue"), CHROMA_BLUE_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_cyan"), CHROMA_CYAN_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_magenta"), CHROMA_MAGENTA_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_yellow"), CHROMA_YELLOW_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_black"), CHROMA_BLACK_BLOCK_ITEM);
-        Registry.register(Registries.ITEM, Identifier.of(MOD_ID, "chroma_white"), CHROMA_WHITE_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "model"), MODEL_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "gun"), GUN_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_red"), CHROMA_RED_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_green"), CHROMA_GREEN_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_blue"), CHROMA_BLUE_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_cyan"), CHROMA_CYAN_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_magenta"), CHROMA_MAGENTA_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_yellow"), CHROMA_YELLOW_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_black"), CHROMA_BLACK_BLOCK_ITEM);
+        Registry.register(BuiltInRegistries.ITEM, Identifier.fromNamespaceAndPath(MOD_ID, "chroma_white"), CHROMA_WHITE_BLOCK_ITEM);
 
-        Registry.register(Registries.ITEM_GROUP, Identifier.of(MOD_ID, "main"), ITEM_GROUP);
+        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, Identifier.fromNamespaceAndPath(MOD_ID, "main"), ITEM_GROUP);
     }
 
     private void registerEvents()
     {
         ServerEntityEvents.ENTITY_LOAD.register((entity, world) ->
         {
-            if (entity instanceof ServerPlayerEntity player)
+            if (entity instanceof ServerPlayer player)
             {
                 Morph morph = Morph.getMorph(player);
 
@@ -527,7 +526,7 @@ public class BBSMod implements ModInitializer
             }
         });
 
-        ServerLifecycleEvents.SERVER_STARTED.register((event) -> worldFolder = event.getSavePath(WorldSavePath.ROOT).toFile());
+        ServerLifecycleEvents.SERVER_STARTED.register((event) -> worldFolder = event.getWorldPath(LevelResource.ROOT).toFile());
         ServerPlayConnectionEvents.JOIN.register((a, b, c) -> ServerNetwork.sendHandshake(c, b));
 
         ActionHandler.registerHandlers(actions);
@@ -557,7 +556,7 @@ public class BBSMod implements ModInitializer
         {
             runnables.add(() ->
             {
-                if (trackedEntity instanceof ServerPlayerEntity playerTwo)
+                if (trackedEntity instanceof ServerPlayer playerTwo)
                 {
                     Morph morph = Morph.getMorph(trackedEntity);
 

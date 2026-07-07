@@ -2,76 +2,76 @@ package mchorse.bbs_mod.actions;
 
 import com.google.common.collect.MapMaker;
 import com.mojang.authlib.GameProfile;
-import net.minecraft.block.entity.SignBlockEntity;
-import net.minecraft.command.permission.PermissionPredicate;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.passive.AbstractHorseEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.network.packet.c2s.common.SyncedClientOptions;
-import net.minecraft.scoreboard.Team;
-import net.minecraft.screen.NamedScreenHandlerFactory;
-import net.minecraft.server.command.CommandOutput;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.stat.Stat;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.UUID;
+import net.minecraft.commands.CommandSource;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.PermissionSet;
+import net.minecraft.stats.Stat;
+import net.minecraft.world.Container;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.scores.PlayerTeam;
 
-public class SuperFakePlayer extends ServerPlayerEntity
+public class SuperFakePlayer extends ServerPlayer
 {
     private static final GameProfile PROFILE = new GameProfile(UUID.fromString("12345678-9ABC-DEF1-2345-6789ABCDEF69"), "[BBS Player]");
     private static final Map<SuperFakePlayer.FakePlayerKey, SuperFakePlayer> FAKE_PLAYER_MAP = new MapMaker().weakValues().makeMap();
 
-    public static SuperFakePlayer get(ServerWorld world)
+    public static SuperFakePlayer get(ServerLevel world)
     {
         Objects.requireNonNull(world, "World may not be null.");
 
         return FAKE_PLAYER_MAP.computeIfAbsent(new SuperFakePlayer.FakePlayerKey(world, PROFILE), key -> new SuperFakePlayer(key.world, key.profile));
     }
 
-    protected SuperFakePlayer(ServerWorld world, GameProfile profile)
+    protected SuperFakePlayer(ServerLevel world, GameProfile profile)
     {
-        super(world.getServer(), world, profile, SyncedClientOptions.createDefault());
+        super(world.getServer(), world, profile, ClientInformation.createDefault());
 
-        this.networkHandler = new SuperFakePlayerNetworkHandler(this);
+        this.connection = new SuperFakePlayerNetworkHandler(this);
     }
 
     @Override
-    public PermissionPredicate getPermissions()
+    public PermissionSet permissions()
     {
-        return PermissionPredicate.ALL;
+        return PermissionSet.ALL_PERMISSIONS;
     }
 
     @Override
-    public CommandOutput getCommandOutput()
+    public CommandSource commandSource()
     {
-        return new CommandOutput()
+        return new CommandSource()
         {
             @Override
-            public void sendMessage(Text message)
+            public void sendSystemMessage(Component message)
             {}
 
             @Override
-            public boolean shouldReceiveFeedback()
+            public boolean acceptsSuccess()
             {
                 return false;
             }
 
             @Override
-            public boolean shouldTrackOutput()
+            public boolean acceptsFailure()
             {
                 return false;
             }
 
             @Override
-            public boolean shouldBroadcastConsoleToOps()
+            public boolean shouldInformAdmins()
             {
                 return false;
             }
@@ -83,11 +83,11 @@ public class SuperFakePlayer extends ServerPlayerEntity
     {}
 
     @Override
-    public void setClientOptions(SyncedClientOptions settings)
+    public void updateOptions(ClientInformation settings)
     {}
 
     @Override
-    public void increaseStat(Stat<?> stat, int amount)
+    public void awardStat(Stat<?> stat, int amount)
     {}
 
     @Override
@@ -95,20 +95,20 @@ public class SuperFakePlayer extends ServerPlayerEntity
     {}
 
     @Override
-    public boolean isInvulnerableTo(ServerWorld world, DamageSource damageSource)
+    public boolean isInvulnerableTo(ServerLevel world, DamageSource damageSource)
     {
         return true;
     }
 
     @Nullable
     @Override
-    public Team getScoreboardTeam()
+    public PlayerTeam getTeam()
     {
         return null;
     }
 
     @Override
-    public void sleep(BlockPos pos)
+    public void startSleeping(BlockPos pos)
     {}
 
     @Override
@@ -118,19 +118,19 @@ public class SuperFakePlayer extends ServerPlayerEntity
     }
 
     @Override
-    public void openEditSignScreen(SignBlockEntity sign, boolean front)
+    public void openTextEdit(SignBlockEntity sign, boolean front)
     {}
 
     @Override
-    public OptionalInt openHandledScreen(@Nullable NamedScreenHandlerFactory factory)
+    public OptionalInt openMenu(@Nullable MenuProvider factory)
     {
         return OptionalInt.empty();
     }
 
     @Override
-    public void openHorseInventory(AbstractHorseEntity horse, Inventory inventory)
+    public void openHorseInventory(AbstractHorse horse, Container inventory)
     {}
 
-    private record FakePlayerKey(ServerWorld world, GameProfile profile)
+    private record FakePlayerKey(ServerLevel world, GameProfile profile)
     {}
 }

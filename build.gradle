@@ -1,6 +1,9 @@
 plugins {
-	id 'fabric-loom' version '1.15-SNAPSHOT'
+	id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT'
 	id 'maven-publish'
+}
+java {
+	toolchain.languageVersion = JavaLanguageVersion.of(25)
 }
 
 version = project.mod_version + "-" + minecraft_version
@@ -49,11 +52,11 @@ loom {
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	
 	// Uncomment the following line to enable the deprecated Fabric API modules.
 	// These are included in the Fabric API production distribution and allow you to update your mod to the latest modules at a later more convenient time.
@@ -63,16 +66,16 @@ dependencies {
 	// decoupled (BBSRendering keeps iris/sodium = false), so these are present for runtime
 	// testing and to enable re-coupling shader-mod compat later. Pinned to the known-good
 	// 1.21.11 pairing (Iris 1.10.7 declares Sodium 0.8.7 as its required dependency).
-	modImplementation "maven.modrinth:sodium:mc1.21.11-0.8.7-fabric"
-	modImplementation "maven.modrinth:iris:1.10.7+1.21.11-fabric"
+	implementation "maven.modrinth:sodium:mc26.2-0.9.0-fabric"
+	implementation "maven.modrinth:iris:1.11.1+26.2-fabric"
 
 	// Iris needs jcpp + glsl-transformer at RUNTIME for shaderpack compile. In the Loom dev
 	// (runClient) env, Iris's nested JiJ copies are NOT put on the classpath, so we declare
 	// them explicitly — pinned to the EXACT versions Iris 1.10.7 bundles (glsl-transformer
 	// 3.0.0-pre3 + jcpp 1.4.14) to avoid a version clash. (The old 2.0.0-pre13 lacked
 	// ParsingCacheStrategy.TWO_TIER and crashed Iris.)
-	modImplementation "org.anarres:jcpp:1.4.14"
-	modImplementation "io.github.douira:glsl-transformer:3.0.0-pre3"
+	implementation "org.anarres:jcpp:1.4.14"
+	implementation "io.github.douira:glsl-transformer:3.0.0-pre3"
 }
 
 processResources {
@@ -84,7 +87,7 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
+	it.options.release = 25
 }
 
 java {
@@ -93,8 +96,8 @@ java {
 	// If you remove this line, sources will not be generated.
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
 }
 
 jar {

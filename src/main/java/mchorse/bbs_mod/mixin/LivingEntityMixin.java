@@ -4,12 +4,12 @@ import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.actions.types.AttackActionClip;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.morphing.IMorphProvider;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityDimensions;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -19,14 +19,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin
 {
-    @Inject(method = "applyDamage", at = @At("HEAD"))
-    public void onApplyDamage(ServerWorld world, DamageSource source, float amount, CallbackInfo info)
+    @Inject(method = "actuallyHurt", at = @At("HEAD"))
+    public void onApplyDamage(ServerLevel world, DamageSource source, float amount, CallbackInfo info)
     {
-        Entity attacker = source.getAttacker();
+        Entity attacker = source.getEntity();
 
-        if (source.isDirect() && attacker != null && attacker.getClass() == ServerPlayerEntity.class)
+        if (source.isDirect() && attacker != null && attacker.getClass() == ServerPlayer.class)
         {
-            BBSMod.getActions().addAction((ServerPlayerEntity) attacker, () ->
+            BBSMod.getActions().addAction((ServerPlayer) attacker, () ->
             {
                 AttackActionClip clip = new AttackActionClip();
 
@@ -37,7 +37,7 @@ public class LivingEntityMixin
         }
     }
 
-    @Inject(method = "getBaseDimensions", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "getDefaultDimensions", at = @At("RETURN"), cancellable = true)
     public void onGetBaseDimensions(CallbackInfoReturnable<EntityDimensions> info)
     {
         if (this instanceof IMorphProvider provider)
@@ -48,7 +48,7 @@ public class LivingEntityMixin
             {
                 LivingEntity entity = (LivingEntity) (Object) this;
                 EntityDimensions dimensions = info.getReturnValue();
-                float height = form.hitboxHeight.get() * (entity.isSneaking() ? form.hitboxSneakMultiplier.get() : 1F);
+                float height = form.hitboxHeight.get() * (entity.isShiftKeyDown() ? form.hitboxSneakMultiplier.get() : 1F);
 
                 if (dimensions.fixed())
                 {
@@ -56,7 +56,7 @@ public class LivingEntityMixin
                 }
                 else
                 {
-                    info.setReturnValue(EntityDimensions.changing(form.hitboxWidth.get(), height));
+                    info.setReturnValue(EntityDimensions.scalable(form.hitboxWidth.get(), height));
                 }
             }
         }
