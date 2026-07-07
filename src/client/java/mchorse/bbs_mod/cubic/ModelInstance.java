@@ -520,10 +520,6 @@ public class ModelInstance implements IModelInstance
 
         if (this.model instanceof Model model)
         {
-            boolean isVao = this.isVAORendered();
-            CubicCubeRenderer renderProcessor = isVao
-                    ? new CubicVAORenderer(shader, this, light, overlay, stencilMap, keys, textureResolver)
-                    : new CubicCubeRenderer(light, overlay, stencilMap, keys);
             List<WeldBinding> bindings = this.getWeldBindings();
 
             if (!bindings.isEmpty())
