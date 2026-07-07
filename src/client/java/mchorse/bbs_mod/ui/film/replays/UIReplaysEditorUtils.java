@@ -234,7 +234,7 @@ public class UIReplaysEditorUtils
 
         for (String bone : bones)
         {
-            if (model.disabledBones.contains(bone))
+            if (PoseBones.isHidden(model.getDisabledBones(), bone))
             {
                 continue;
             }
@@ -576,7 +576,7 @@ public class UIReplaysEditorUtils
 
             if (materialDefault == null)
             {
-                materialDefault = model.getMaterialTexture(material, model.texture);
+                materialDefault = model.getMaterialTexture(material, model.getTexture());
             }
 
             ValueLink property = new ValueLink(id, materialDefault);
@@ -719,6 +719,13 @@ public class UIReplaysEditorUtils
             transform,
             panel.replayEditor.getContext() == null ? 0F : panel.replayEditor.getContext().getTransition()
         ));
+
+        /* World-space copy/paste only makes sense for an actor's bone in the scene, so the world
+         * matrix provider is wired solely for the pose editor's transform (other tracks leave it off
+         * and the world context actions stay hidden there). */
+        boolean pose = panel.replayEditor.keyframeEditor.editor instanceof UIPoseKeyframeFactory;
+
+        transform.worldTransform(pose ? new FilmBoneWorldProvider(panel) : null);
     }
 
     /**
@@ -1244,7 +1251,7 @@ public class UIReplaysEditorUtils
 
         List<String> bones = new ArrayList<>(model.model.getGroupKeysInHierarchyOrder());
 
-        bones.removeIf((bone) -> PoseBones.isHidden(model.disabledBones, bone));
+        bones.removeIf((bone) -> PoseBones.isHidden(model.getDisabledBones(), bone));
 
         List<Keyframe<Pose>> selectedKeyframes = (List<Keyframe<Pose>>) (List<?>) poseSheet.selection.getSelected();
 
@@ -1388,7 +1395,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getAdjacentGroups(bone))
                 {
-                    if (PoseBones.isHidden(model.disabledBones, modelGroup))
+                    if (PoseBones.isHidden(model.getDisabledBones(), modelGroup))
                     {
                         continue;
                     }
@@ -1421,7 +1428,7 @@ public class UIReplaysEditorUtils
             {
                 for (String modelGroup : model.model.getHierarchyGroups(bone))
                 {
-                    if (PoseBones.isHidden(model.disabledBones, modelGroup))
+                    if (PoseBones.isHidden(model.getDisabledBones(), modelGroup))
                     {
                         continue;
                     }
