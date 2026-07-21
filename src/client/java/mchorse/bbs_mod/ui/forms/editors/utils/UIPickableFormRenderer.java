@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.Form;
@@ -166,7 +167,12 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
         if (this.renderForm == null || this.renderForm.get())
         {
+            /* The form editor viewport gets the same deferred translucency as the world: the
+             * form's semi-transparent pixels draw after all its opaque ones, sorted, without
+             * hiding bones behind them. */
+            FormTranslucentQueue.begin();
             FormUtilsClient.render(this.form, formContext);
+            FormTranslucentQueue.flush();
 
             if (this.form.hitbox.get())
             {
@@ -210,7 +216,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
 
             stack.pop();
 
-            this.stencil.pickGUI(context, this.area);
+            this.stencil.pickGUI(context, this.area, BBSSettings.gizmoHoverTolerance.get(), Gizmo.STENCIL_MAX);
             this.stencil.unbind(this.stencilMap);
 
             MinecraftClient.getInstance().getFramebuffer().beginWrite(true);
@@ -279,6 +285,7 @@ public class UIPickableFormRenderer extends UIFormRenderer implements GizmoViewp
         super.render(context);
 
         this.gizmo.renderSphereHighlight(context);
+        this.gizmo.renderReadout(context);
 
         if (!this.stencil.hasPicked())
         {

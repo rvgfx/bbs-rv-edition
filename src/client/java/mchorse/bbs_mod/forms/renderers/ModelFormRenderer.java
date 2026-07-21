@@ -22,6 +22,7 @@ import mchorse.bbs_mod.cubic.model.ArmorType;
 import mchorse.bbs_mod.cubic.model.bobj.BOBJModel;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.ITickable;
 import mchorse.bbs_mod.forms.entities.IEntity;
@@ -342,7 +343,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
             newStack.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
         }
 
-        Matrix4f baseTransform = ui ? null : new Matrix4f((world != null ? world : stack).peek().getPositionMatrix());
+        /* Strictly the world frame: it's what places the model in the world for the simulating subsystems
+         * (bone physics resolves gravity, wind and its collisions against it), so falling back to the render
+         * stack when there is no world stack — the first person arm — resolved them against the camera
+         * instead, and gravity pulled toward the bottom of the screen. Without a world frame there is no
+         * honest answer, so they run model-local, as they do in the UI. */
+        Matrix4f baseTransform = ui || world == null ? null : new Matrix4f(world.peek().getPositionMatrix());
 
         this.applyIKOnce(model, baseTransform);
         this.applyPhysicsOnce(target, model, transition, baseTransform);
@@ -522,8 +528,15 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
             CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
 
+            /* Translucent armor layers ride the deferred sorted pass (see
+             * CustomVertexConsumerProvider#draw(RenderLayer)); only reached outside picking. */
+            Vector3f armorOrigin = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+
+            FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(armorOrigin));
+
             ActorEntityRenderer.armorRenderer.renderArmorSlot(stack, consumers, target, type.slot, type, light);
             consumers.draw();
+            FormTranslucentQueue.setSortOrigin(null);
 
             CustomVertexConsumerProvider.clearRunnables();
 
@@ -560,6 +573,12 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 CustomVertexConsumerProvider.hijackVertexFormat((l) -> RenderSystem.enableBlend());
 
+                /* Translucent item layers (potions, glass blocks in hand) ride the deferred
+                 * sorted pass; only reached outside picking. */
+                Vector3f itemOrigin = stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+
+                FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(itemOrigin));
+
                 consumers.setSubstitute(BBSRendering.getColorConsumer(color));
 
                 /* For some reason, due to Sodium and my color consumer, in some cases items like Trident,
@@ -577,6 +596,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
                 MinecraftClient.getInstance().getItemRenderer().renderItem(null, itemStack, mode, mode == ModelTransformationMode.THIRD_PERSON_LEFT_HAND, stack, consumers, target.getWorld(), light, overlay, 0);
                 consumers.draw();
                 consumers.setSubstitute(null);
+                FormTranslucentQueue.setSortOrigin(null);
 
                 CustomVertexConsumerProvider.clearRunnables();
 
@@ -873,7 +893,7 @@ public class ModelFormRenderer extends FormRenderer<ModelForm> implements ITicka
 
                 MatrixStackUtils.applyTransform(stack, part.transform.get());
 
-                FormUtilsClient.getRenderer(form).collectMatrices(part.useTarget.get() ? entity : part.getEntity(), stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
+                FormUtilsClient.getRenderer(form).collectMatrices(part.getRenderEntity(entity), stack, matrices, StringUtils.combinePaths(prefix, String.valueOf(i)), transition);
 
                 stack.pop();
             }

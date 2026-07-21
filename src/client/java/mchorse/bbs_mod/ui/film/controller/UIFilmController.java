@@ -758,7 +758,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     @Override
     public void pickGizmoForm(UIContext context, Form form, String bone)
     {
-        this.panel.replayEditor.pickForm(form, bone);
+        this.panel.replayEditor.pickFormWithOffers(context, form, bone);
     }
 
     private void pickReplay(int index)
@@ -1105,6 +1105,47 @@ public class UIFilmController extends UIElement implements GizmoViewport
         }
     }
 
+    /**
+     * Insert position and rotation keyframes at the current tick from the live
+     * Minecraft player's world transform - a quick way to "teleport" the replay
+     * to where the player is standing (and facing). Only the transform channels
+     * are touched (unlike full player recording), so no stance/velocity noise is
+     * added to the replay.
+     */
+    public void insertPlayerFrame()
+    {
+        Replay replay = this.getReplay();
+
+        if (replay == null || MinecraftClient.getInstance().player == null)
+        {
+            return;
+        }
+
+        Morph morph = Morph.getMorph(MinecraftClient.getInstance().player);
+
+        if (morph == null)
+        {
+            return;
+        }
+
+        IEntity player = morph.entity;
+        int tick = this.getTick();
+
+        BaseValue.edit(replay.keyframes, (keyframes) ->
+        {
+            keyframes.x.insert(tick, player.getX());
+            keyframes.y.insert(tick, player.getY());
+            keyframes.z.insert(tick, player.getZ());
+
+            keyframes.yaw.insert(tick, (double) player.getYaw());
+            keyframes.pitch.insert(tick, (double) player.getPitch());
+            keyframes.headYaw.insert(tick, (double) player.getHeadYaw());
+            keyframes.bodyYaw.insert(tick, (double) player.getBodyYaw());
+        });
+
+        UIUtils.playClick();
+    }
+
     /* Update */
 
     public void update()
@@ -1351,6 +1392,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
         {
             this.gizmo.update(context);
             this.gizmo.renderSphereHighlight(context);
+            this.gizmo.renderReadout(context);
         }
 
         if (!this.stencil.hasPicked())
@@ -1651,8 +1693,9 @@ public class UIFilmController extends UIElement implements GizmoViewport
 
         int x = (int) ((context.mouseX - viewport.x) / (float) viewport.w * mainTexture.width);
         int y = (int) ((1F - (context.mouseY - viewport.y) / (float) viewport.h) * mainTexture.height);
+        int radius = Math.round(BBSSettings.gizmoHoverTolerance.get() * mainTexture.width / (float) viewport.w);
 
-        this.stencil.pick(x, y);
+        this.stencil.pick(x, y, radius, Gizmo.STENCIL_MAX);
         this.stencil.unbind(this.stencilMap);
 
         MinecraftClient.getInstance().getFramebuffer().beginWrite(true);

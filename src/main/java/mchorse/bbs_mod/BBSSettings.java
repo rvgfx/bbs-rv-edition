@@ -20,12 +20,15 @@ import mchorse.bbs_mod.settings.values.ui.ValueStringKeys;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.interps.IInterp;
+import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
 
 public class BBSSettings {
 
 	public static final String DEFAULT_FFMPEG_ARGUMENTS = "-f rawvideo -pix_fmt bgr24 -s %WIDTH%x%HEIGHT% -r %FPS% -i - -vf %FILTERS% -c:v libx264 -preset ultrafast -tune zerolatency -qp 18 -pix_fmt yuv420p %NAME%.mp4";
 	public static final String DEFAULT_AUDIO_FFMPEG_ARGUMENTS = "-f rawvideo -pix_fmt bgr24 -s %WIDTH%x%HEIGHT% -r %FPS% -i - -i %AUDIO_TRACK% -vf %FILTERS% -c:v libx264 -preset ultrafast -tune zerolatency -qp 18 -pix_fmt yuv420p -c:a aac -b:a 128k -shortest %NAME%.mp4";
+	public static final String DEFAULT_MUX_FFMPEG_ARGUMENTS = "-y -i %VIDEO% -i %AUDIO_TRACK% -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -shortest %NAME%.mp4";
 
 	public static ValueColors favoriteColors;
 	public static ValueColors recentColors;
@@ -36,12 +39,13 @@ public class BBSSettings {
 	public static ValueInt stencilHighlightColor;
 	public static ValueBoolean enableTrackpadIncrements;
 	public static ValueBoolean enableTrackpadScrolling;
-	public static ValueInt userIntefaceScale;
+	public static ValueFloat userIntefaceScale;
 	public static ValueInt theme;
 	public static ValueFloat fov;
 	public static ValueBoolean hsvColorPicker;
 	public static ValueBoolean forceQwerty;
 	public static ValueBoolean freezeModels;
+	public static ValueBoolean listModelPreview;
 	public static ValueBoolean morphingFocusSearch;
 	public static ValueFloat axesScale;
 	public static ValueFloat axesThickness;
@@ -53,6 +57,8 @@ public class BBSSettings {
 	public static ValueFloat snapTranslate;
 	public static ValueFloat snapRotate;
 	public static ValueFloat snapScale;
+	public static ValueInt gizmoHoverTolerance;
+	public static ValueFloat gizmoOpacity;
 	public static ValueBoolean uniformScale;
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
@@ -96,8 +102,9 @@ public class BBSSettings {
 	public static ValueInt videoFrameRate;
 	public static ValueBoolean videoLimitFrameRate;
 	public static ValueString videoExportPath;
+	public static ValueString videoExportFilenameFormat;
 	public static ValueBoolean videoExportAudio;
-	public static ValueBoolean audioEnvironment;
+	public static ValueBoolean videoExportMinecraftSounds;
 	public static ValueBoolean videoMuteAudioWhileRender;
 	public static ValueInt videoMotionBlur;
 	public static ValueInt videoHeldFrames;
@@ -106,6 +113,7 @@ public class BBSSettings {
 	public static ValueBoolean videoPlaySoundAfterExport;
 	public static ValueString videoArguments;
 	public static ValueString videoArgumentsAudio;
+	public static ValueString videoArgumentsMux;
 
 	public static ValueFloat editorCameraSpeed;
 	public static ValueFloat editorCameraAngleSpeed;
@@ -139,6 +147,7 @@ public class BBSSettings {
 	public static ValueBoolean editorResizablePanels;
 	public static ValueInt editorTrackWidth;
 	public static ValueInt keyframeDefaultShape;
+	public static ValueString keyframeDefaultInterpolation;
 	public static ValueInt editorPreviewSizeMode;
 	public static ValueInt editorPreviewCustomWidth;
 	public static ValueInt editorPreviewCustomHeight;
@@ -374,6 +383,25 @@ public class BBSSettings {
 		return index >= 0 && index < values.length ? values[index] : KeyframeShape.SQUARE;
 	}
 
+	/**
+	 * The interpolation given to a hand-created keyframe when it has no neighbour to inherit
+	 * from (see {@code IUIKeyframeGraph#addKeyframeManually}) - i.e. the replacement for the
+	 * hardcoded linear that used to apply in that "empty spot" case. Keyframes that do inherit
+	 * from a neighbour keep the neighbour's interpolation, and recorded/baked keyframes never
+	 * consult this. Falls back to linear before settings are registered or on an unknown key.
+	 */
+	public static IInterp getDefaultKeyframeInterpolation()
+	{
+		if (keyframeDefaultInterpolation == null)
+		{
+			return Interpolations.LINEAR;
+		}
+
+		IInterp interp = Interpolations.MAP.get(keyframeDefaultInterpolation.get());
+
+		return interp == null ? Interpolations.LINEAR : interp;
+	}
+
 	public static boolean migrateLegacySettings(MapType root)
 	{
 		MapType appearance = root.getMap("appearance");
@@ -436,16 +464,17 @@ public class BBSSettings {
 		builder.register(language = new ValueLanguage("language"));
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
-		userIntefaceScale = builder.getInt("ui_scale", 2, 0, 4);
+		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F);
 		fov = builder.getFloat("fov", 40, 0, 180);
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
 		freezeModels = builder.getBoolean("freeze_models", false);
+		listModelPreview = builder.getBoolean("list_model_preview", true);
 		morphingFocusSearch = builder.getBoolean("morphing_focus_search", false);
 		uniformScale = builder.getBoolean("uniform_scale", false);
 		clickSound = builder.getBoolean("click_sound", false);
 		favoriteColors = new ValueColors("favorite_colors");
-		recentColors = new ValueColors("recent_colors");
+		recentColors = new ValueColors("recent_colors").limit(33);
 		disabledSheets = new ValueStringKeys("disabled_sheets");
 		disabledSheets.set(defaultFilters);
 		builder.register(favoriteColors);
@@ -476,6 +505,8 @@ public class BBSSettings {
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
 		snapRotate = builder.getFloat("snap_rotate", 5F, 0.001F, 90F);
 		snapScale = builder.getFloat("snap_scale", 0.1F, 0.001F, 10F);
+		gizmoHoverTolerance = builder.getInt("gizmo_hover_tolerance", 8, 0, 40);
+		gizmoOpacity = builder.getFloat("gizmo_opacity", 1F, 0.05F, 1F);
 		defaultLocalTransform = builder.getBoolean("default_local", false);
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
 		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
@@ -527,8 +558,9 @@ public class BBSSettings {
 		videoFrameRate = builder.getInt("frame_rate", 60, 10, 1000);
 		videoLimitFrameRate = builder.getBoolean("limit_frame_rate", false);
 		videoExportPath = builder.getString("export_path", "");
+		videoExportFilenameFormat = builder.getString("filename_format", "{datetime}");
 		videoExportAudio = builder.getBoolean("audio", false);
-		audioEnvironment = builder.getBoolean("audio_environment", false);
+		videoExportMinecraftSounds = builder.getBoolean("minecraft_sounds", false);
 		videoMuteAudioWhileRender = builder.getBoolean("mute_audio_while_render", false);
 		videoMotionBlur = builder.getInt("motion_blur", 0, 0, 6);
 		videoHeldFrames = builder.getInt("held_frames", 1, 1, 1000);
@@ -537,6 +569,7 @@ public class BBSSettings {
 		videoPlaySoundAfterExport = builder.getBoolean("play_sound_after_export", true);
 		videoArguments = builder.getString("arguments", DEFAULT_FFMPEG_ARGUMENTS);
 		videoArgumentsAudio = builder.getString("arguments_audio", DEFAULT_AUDIO_FFMPEG_ARGUMENTS);
+		videoArgumentsMux = builder.getString("arguments_mux", DEFAULT_MUX_FFMPEG_ARGUMENTS);
 
 		/* Camera editor */
 		builder.category("editor", Icons.EDITOR);
@@ -551,6 +584,7 @@ public class BBSSettings {
 		editorCrosshair = builder.getBoolean("crosshair", false);
 		editorSeconds = builder.getBoolean("seconds", false);
 		editorTimelineGrid = builder.getBoolean("timeline_grid", false);
+		keyframeDefaultInterpolation = builder.getString("keyframe_default_interpolation", Interpolations.LINEAR.getKey());
 		editorPeriodicSave = builder.getInt("periodic_save", 60, 0, 3600);
 		editorHorizontalFlight = builder.getBoolean("horizontal_flight", false);
 		editorOrbitMovementRequiresFlight = builder.getBoolean("orbit_movement_requires_flight", true);

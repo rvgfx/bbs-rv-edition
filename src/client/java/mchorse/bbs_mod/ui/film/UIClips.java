@@ -1074,6 +1074,18 @@ public class UIClips extends UIElement
         }
     }
 
+    /**
+     * Whether the mouse is over the ruler strip at the very top of the timeline.
+     * The ruler paints an opaque band that clips clip rendering to below it, but
+     * clips still occupy their logical rows there for hit-testing - so a click on
+     * the ruler must scrub the cursor rather than grab the clip hidden behind it
+     * (see {@link #handleLeftClick}).
+     */
+    private boolean isInRuler(int mouseY)
+    {
+        return mouseY >= this.area.y && mouseY < TimelineRulerRenderer.getRulerBottom(this.area);
+    }
+
     public int fromLayerY(int mouseY)
     {
         int bottom = this.area.ey() - MARGIN;
@@ -1238,7 +1250,9 @@ public class UIClips extends UIElement
 
     private boolean handleLeftClick(UIContext context, int mouseX, int mouseY, boolean ctrl, boolean shift, boolean alt)
     {
-        if (!this.hasEmbeddedView())
+        /* Clicks on the ruler are "solid": they scrub the cursor and never grab a
+         * clip whose logical row is hidden behind the ruler band (see isInRuler). */
+        if (!this.hasEmbeddedView() && !this.isInRuler(mouseY))
         {
             int tick = (int) Math.floor(this.scale.from(mouseX));
             int layerIndex = this.fromLayerY(mouseY);

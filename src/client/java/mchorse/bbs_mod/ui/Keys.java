@@ -26,6 +26,8 @@ public class Keys
     public static final KeyCombo DELETE = new KeyCombo("delete", UIKeys.GENERAL_REMOVE, GLFW.GLFW_KEY_DELETE);
     public static final KeyCombo CONFIRM = new KeyCombo("confirm", UIKeys.GENERAL_CONFIRM, GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_LEFT_CONTROL);
     public static final KeyCombo CLOSE = new KeyCombo("close", UIKeys.GENERAL_CLOSE, GLFW.GLFW_KEY_ESCAPE);
+    public static final KeyCombo UI_SCALE_INC = new KeyCombo("ui_scale_inc", UIKeys.KEYS_UI_SCALE_INC, GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_LEFT_CONTROL).repeatable();
+    public static final KeyCombo UI_SCALE_DEC = new KeyCombo("ui_scale_dec", UIKeys.KEYS_UI_SCALE_DEC, GLFW.GLFW_KEY_MINUS, GLFW.GLFW_KEY_LEFT_CONTROL).repeatable();
 
     /* Camera editor */
     public static final KeyCombo ADD_AT_CURSOR = new KeyCombo("add_at_cursor", UIKeys.CAMERA_TIMELINE_CONTEXT_ADD_AT_CURSOR, GLFW.GLFW_KEY_A, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("camera");
@@ -149,6 +151,7 @@ public class Keys
     public static final KeyCombo FILM_CONTROLLER_TOGGLE_MOTION_PATH_PIN = new KeyCombo("toggle_motion_path_pin", UIKeys.FILM_CONTROLLER_MOTION_PATH_KEYS_TOGGLE_PIN, GLFW.GLFW_KEY_M, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_OPEN_REPLAYS = new KeyCombo("toggle_replays", UIKeys.FILM_CONTROLLER_KEYS_OPEN_REPLAYS, GLFW.GLFW_KEY_RIGHT_SHIFT).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_CYCLE_EDITORS = new KeyCombo("cycle_editors", UIKeys.FILM_CONTROLLER_KEYS_CYCLE_EDITORS, GLFW.GLFW_KEY_GRAVE_ACCENT).categoryKey("film_controller");
+    public static final KeyCombo FILM_CONTROLLER_TOGGLE_ACTIONS = new KeyCombo("toggle_actions", UIKeys.FILM_CONTROLLER_KEYS_TOGGLE_ACTIONS, GLFW.GLFW_KEY_GRAVE_ACCENT, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_NEXT_DOCK_TAB = new KeyCombo("next_dock_tab", UIKeys.FILM_CONTROLLER_KEYS_CYCLE_EDITORS, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_PREV_DOCK_TAB = new KeyCombo("prev_dock_tab", UIKeys.FILM_CONTROLLER_KEYS_CYCLE_EDITORS, GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("film_controller");
     public static final KeyCombo FILM_CONTROLLER_PREV_REPLAY = new KeyCombo("prev_replay", UIKeys.FILM_CONTROLLER_KEYS_PREV_REPLAY, GLFW.GLFW_KEY_PAGE_UP).categoryKey("film_controller");
@@ -180,6 +183,12 @@ public class Keys
     public static final KeyCombo MODEL_BLOCKS_MOVE_TO = new KeyCombo("move_to", UIKeys.MODEL_BLOCKS_KEYS_MOVE_TO, GLFW.GLFW_KEY_G, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_blocks");
     public static final KeyCombo MODEL_BLOCKS_TOGGLE_RENDERING = new KeyCombo("toggle_rendering", UIKeys.MODEL_BLOCKS_KEYS_TOGGLE_RENDERING, GLFW.GLFW_KEY_F7).categoryKey("model_blocks");
     public static final KeyCombo MODEL_BLOCKS_TELEPORT = new KeyCombo("teleport", UIKeys.MODEL_BLOCKS_KEYS_TELEPORT, GLFW.GLFW_KEY_T, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_blocks");
+
+    /* Model editor */
+    public static final KeyCombo MODEL_EDITOR_EXPAND_ALL = new KeyCombo("expand_all", UIKeys.MODEL_EDITOR_KEYS_EXPAND_ALL, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_COLLAPSE_ALL = new KeyCombo("collapse_all", UIKeys.MODEL_EDITOR_KEYS_COLLAPSE_ALL, GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_LEFT_SHIFT).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_FIND_BONE = new KeyCombo("find_bone", UIKeys.MODEL_EDITOR_KEYS_FIND_BONE, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
+    public static final KeyCombo MODEL_EDITOR_OPEN_HISTORY = new KeyCombo("open_history", UIKeys.MODEL_EDITOR_OPEN_HISTORY, GLFW.GLFW_KEY_H, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("model_editor");
 
     /* Texture picker */
     public static final KeyCombo TEXTURE_PICKER_FIND = new KeyCombo("find", UIKeys.TEXTURE_KEYS_FIND_ALL, GLFW.GLFW_KEY_F, GLFW.GLFW_KEY_LEFT_CONTROL).categoryKey("texture_picker");

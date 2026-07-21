@@ -8,6 +8,7 @@ import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.cubic.render.ModelPivotFrames;
 import mchorse.bbs_mod.cubic.render.ModelRotationBlender;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.FormUtils;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.forms.forms.ModelForm;
 import net.minecraft.world.World;
@@ -21,6 +22,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -34,8 +36,21 @@ public final class ModelPhysicsRuntime
     static final class InstanceState
     {
         public final Map<String, ChainState> chains = new HashMap<>();
+
+        /**
+         * The model the chains were last simulated against. States are keyed by form, not by model, so a
+         * form swapping its model has to drop the sim built on the old skeleton instead of reusing it.
+         */
+        public String modelId;
     }
 
+    /**
+     * Simulation state per form, per entity. The form is identified by its path in the entity's form tree
+     * ({@link FormUtils#getPath}, the same identity the film's physics tracks are keyed by), because a
+     * {@link ModelInstance} is shared by every form using that model asset — keying by it collapsed body
+     * parts that mirror their target and share a model (paired wings, twin braids) onto one state, where
+     * the first one rendered simulated and the rest silently rendered its chains.
+     */
     private static final WeakHashMap<IEntity, Map<String, InstanceState>> STATES = new WeakHashMap<>();
 
     private ModelPhysicsRuntime()
@@ -50,11 +65,11 @@ public final class ModelPhysicsRuntime
 
     public static void invalidate(String modelId)
     {
-        for (Map<String, InstanceState> byModel : STATES.values())
+        for (Map<String, InstanceState> byForm : STATES.values())
         {
-            if (byModel != null)
+            if (byForm != null)
             {
-                byModel.remove(modelId);
+                byForm.values().removeIf((state) -> Objects.equals(state.modelId, modelId));
             }
         }
     }
@@ -68,8 +83,13 @@ public final class ModelPhysicsRuntime
 
         IModel model = instance.model;
 
+        if (!(instance.form instanceof ModelForm form))
+        {
+            return;
+        }
+
         ModelPhysicsCache.Compiled compiled = null;
-        if (instance.form instanceof ModelForm modelForm && modelForm.physics.get() instanceof MapType map)
+        if (form.physics.get() instanceof MapType map)
         {
             compiled = ModelPhysicsCache.getFromData(model, map);
         }
@@ -81,21 +101,49 @@ public final class ModelPhysicsRuntime
 
         Map<String, ModelConstraintsConfig.BoneConstraint> constraints = ModelConstraintsRuntime.getBones(instance);
 
-        Map<String, InstanceState> byModel = STATES.computeIfAbsent(entity, (e) -> new HashMap<>());
-        InstanceState state = byModel.computeIfAbsent(instance.id, (k) -> new InstanceState());
+        Map<String, InstanceState> byForm = STATES.computeIfAbsent(entity, (e) -> new HashMap<>());
+        InstanceState state = byForm.computeIfAbsent(FormUtils.getPath(form), (k) -> new InstanceState());
+
+        if (!Objects.equals(state.modelId, instance.id))
+        {
+            state.chains.clear();
+            state.modelId = instance.id;
+        }
 
         /* The wind track (if keyframed) replaces the configured wind wholesale at playback, mirroring how the
          * physics track layers over the per-chain config. */
         ModelPhysicsConfig.Wind wind = compiled.wind();
 
-        if (instance.form instanceof ModelForm modelForm && modelForm.windControlOverride != null)
+        if (form.windControlOverride != null)
         {
-            WindControl override = modelForm.windControlOverride;
+            WindControl override = form.windControlOverride;
 
-            wind = new ModelPhysicsConfig.Wind(override.strength, override.x, override.y, override.z, override.turbulence, override.turbulenceSpeed, override.turbulenceScale);
+            wind = new ModelPhysicsConfig.Wind(override.strength, override.x, override.y, override.z, override.turbulence, override.turbulenceSpeed, override.turbulenceScale, override.local);
         }
 
+        wind = resolveWindDirection(wind, baseTransform);
+
         applyCompiled(entity.getWorld(), entity.getAge(), transition, model, instance, compiled.chains(), wind, constraints, state, baseTransform);
+    }
+
+    /**
+     * When the wind direction is local to the model, rotates it by the model's world orientation (the
+     * rotation baked into {@code baseTransform}, the same transform the chain positions live in), so the
+     * wind follows the model as it turns. The solver only ever sees a plain world-space direction. A
+     * world-space or inactive wind is returned unchanged.
+     */
+    private static ModelPhysicsConfig.Wind resolveWindDirection(ModelPhysicsConfig.Wind wind, Matrix4f baseTransform)
+    {
+        if (wind == null || !wind.local() || !wind.active() || baseTransform == null)
+        {
+            return wind;
+        }
+
+        Vector3f dir = new Vector3f(wind.x(), wind.y(), wind.z());
+
+        baseTransform.transformDirection(dir);
+
+        return new ModelPhysicsConfig.Wind(wind.strength(), dir.x, dir.y, dir.z, wind.turbulence(), wind.turbulenceSpeed(), wind.turbulenceScale(), false);
     }
 
     private static void applyCompiled(World world, int age, float transition, IModel model, ModelInstance instance, List<ModelPhysicsCache.CompiledChain> compiledChains, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, InstanceState state, Matrix4f baseTransform)
@@ -178,8 +226,8 @@ public final class ModelPhysicsRuntime
         {
             state.pos = new Vector3f[pointCount];
             state.prev = new Vector3f[pointCount];
-            state.settled = new Vector3f[pointCount];
-            state.settledPrev = new Vector3f[pointCount];
+            state.settledLocal = new Vector3f[pointCount];
+            state.settledPrevLocal = new Vector3f[pointCount];
             state.render = new Vector3f[pointCount];
             state.poseLocal = new Vector3f[pointCount];
 
@@ -187,8 +235,8 @@ public final class ModelPhysicsRuntime
             {
                 state.pos[i] = new Vector3f();
                 state.prev[i] = new Vector3f();
-                state.settled[i] = new Vector3f();
-                state.settledPrev[i] = new Vector3f();
+                state.settledLocal[i] = new Vector3f();
+                state.settledPrevLocal[i] = new Vector3f();
                 state.render[i] = new Vector3f();
                 state.poseLocal[i] = new Vector3f();
             }
