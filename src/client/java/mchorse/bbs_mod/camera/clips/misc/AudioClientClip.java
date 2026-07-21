@@ -6,7 +6,6 @@ import mchorse.bbs_mod.audio.SoundPlayer;
 import mchorse.bbs_mod.camera.data.Position;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.resources.Link;
-import mchorse.bbs_mod.utils.LoopbackAudioController;
 import mchorse.bbs_mod.utils.clips.Clip;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 
@@ -42,17 +41,6 @@ public class AudioClientClip extends AudioClip
         Map<Link, Playback> playback = getPlayback(context);
         boolean muteFilmAudioDuringVideoCapture = BBSSettings.videoMuteAudioWhileRender.get()
             && BBSModClient.getVideoRecorder().isRecording();
-
-        if (LoopbackAudioController.isFilmClipPlaybackSuppressed())
-        {
-            for (Link link : playback.keySet())
-            {
-                BBSModClient.getSounds().stop(link);
-            }
-
-            playback.clear();
-            return;
-        }
 
         for (Map.Entry<Link, Playback> entry : playback.entrySet())
         {
