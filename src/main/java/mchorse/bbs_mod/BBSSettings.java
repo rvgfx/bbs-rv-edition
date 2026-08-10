@@ -40,6 +40,7 @@ public class BBSSettings {
 	public static ValueBoolean enableTrackpadIncrements;
 	public static ValueBoolean enableTrackpadScrolling;
 	public static ValueFloat userIntefaceScale;
+	public static ValueBoolean pixelArtSmoothing;
 	public static ValueInt theme;
 	public static ValueFloat fov;
 	public static ValueBoolean hsvColorPicker;
@@ -63,6 +64,7 @@ public class BBSSettings {
 	public static ValueBoolean clickSound;
 	public static ValueBoolean gizmos;
 	public static ValueBoolean defaultLocalTransform;
+	public static ValueInt transformSpace;
 	public static ValueBoolean transformHotkeys3dRay;
 	public static ValueBoolean poseMirrorEdit;
 	public static ValueBoolean poseAlternateInvert;
@@ -130,6 +132,9 @@ public class BBSSettings {
 	public static ValueBoolean editorHorizontalFlight;
 	public static ValueBoolean editorOrbitMovementRequiresFlight;
 	public static ValueBoolean editorOrbitCenterMarker;
+	public static ValueBoolean editorOrbitGizmo;
+	public static ValueFloat editorOrbitGizmoScale;
+	public static ValueBoolean editorOrbitAxisOrtho;
 	public static ValueMotionPath editorMotionPath;
 	public static ValueBoolean editorOrbitTeleportOnSwitch;
 	public static ValueFloat editorCameraSmoothness;
@@ -153,6 +158,7 @@ public class BBSSettings {
 	public static ValueInt editorPreviewCustomHeight;
 	public static ValueFloat editorPreviewResolutionScale;
 	public static ValueBoolean editorClipAutoName;
+	public static ValueBoolean editorKeepFrameOnExit;
 
 	public static ValueFloat recordingCountdown;
 	public static ValueBoolean recordingSwipeDamage;
@@ -170,6 +176,9 @@ public class BBSSettings {
 
 	public static ValueFloat backgroundBrightness;
 	public static ValueBoolean interfaceShadows;
+	public static ValueBoolean interfaceHighlights;
+	public static ValueFloat overlayBackgroundOpacity;
+	public static ValueBoolean overlayGradientBorder;
 
 	public static ValueBoolean shaderCurvesEnabled;
 
@@ -194,16 +203,35 @@ public class BBSSettings {
 	private static final float IDENTITY_BRIGHTNESS = 1F;
 	private static final float BRIGHTNESS_EPSILON = 0.001F;
 	private static final int DEFAULT_PRIMARY_COLOR = 0xff3242;
-	private static final int LIGHT_CHROME_SURFACE = 0xffe6e9ef;
-	private static final int DARK_CHROME_SURFACE = 0xff111316;
-	private static final int LIGHT_BASE_SURFACE = 0xfff1f4f8;
-	private static final int DARK_BASE_SURFACE = 0xff171a1f;
-	private static final int LIGHT_RAISED_SURFACE = 0xfff8fafd;
-	private static final int DARK_RAISED_SURFACE = 0xff1d2127;
-	private static final int LIGHT_DEEP_SURFACE = 0xffdee4ed;
-	private static final int DARK_DEEP_SURFACE = 0xff0f1217;
-	private static final int LIGHT_DIVIDER_COLOR = 0xffc2cbd8;
-	private static final int DARK_DIVIDER_COLOR = 0xff30353d;
+	private static final float DEFAULT_OVERLAY_BACKGROUND_OPACITY = 0.5F;
+	/**
+	 * Tonal map of the interface's surfaces, four levels deep: deep sits under
+	 * the content (fields, timeline wells), chrome frames everything, base is
+	 * the working area, raised floats above it (panels, popups, buttons).
+	 *
+	 * The levels are a neutral ladder — no tint at all, lightness stepping
+	 * evenly by 0.022 in OKLab (the perceptual scale, so the steps read as
+	 * equal rather than merely measure as equal). Both themes use the same
+	 * step, which makes them mirror images of each other.
+	 *
+	 * Both where the dark ramp sits and how soft it is come off a screenshot
+	 * of Essential's interface. Their dominant grey (#181818, three quarters
+	 * of their window) and the greys they layer over it (#1d1d1d cards,
+	 * #222222 frame) are these very values, and the step matches the distance
+	 * they keep between a card and its background. A small step is the whole
+	 * point: depth should be felt rather than announced, and a dark interface
+	 * that stays dark is easier to sit in front of for hours.
+	 */
+	private static final int LIGHT_DEEP_SURFACE = 0xffe4e4e4;
+	private static final int DARK_DEEP_SURFACE = 0xff131313;
+	private static final int LIGHT_CHROME_SURFACE = 0xffebebeb;
+	private static final int DARK_CHROME_SURFACE = 0xff181818;
+	private static final int LIGHT_BASE_SURFACE = 0xfff3f3f3;
+	private static final int DARK_BASE_SURFACE = 0xff1d1d1d;
+	private static final int LIGHT_RAISED_SURFACE = 0xfffafafa;
+	private static final int DARK_RAISED_SURFACE = 0xff222222;
+	private static final int LIGHT_DIVIDER_COLOR = 0xffd9d9d9;
+	private static final int DARK_DIVIDER_COLOR = 0xff2a2a2a;
 
 	public static int primaryColor()
 	{
@@ -329,6 +357,22 @@ public class BBSSettings {
 	public static int panelShadowTransparentColor()
 	{
 		return Colors.setA(primaryColor.get(), 0F);
+	}
+
+	/**
+	 * Dimming behind an overlay panel. Zero opacity leaves whatever is behind
+	 * the panel fully visible.
+	 */
+	public static int overlayBackground()
+	{
+		float opacity = overlayBackgroundOpacity == null ? DEFAULT_OVERLAY_BACKGROUND_OPACITY : overlayBackgroundOpacity.get();
+
+		return Colors.a(MathUtils.clamp(opacity, 0F, 1F));
+	}
+
+	public static boolean hasOverlayGradientBorder()
+	{
+		return overlayGradientBorder == null || overlayGradientBorder.get();
 	}
 
 	public static int getDefaultDuration()
@@ -464,7 +508,8 @@ public class BBSSettings {
 		builder.register(language = new ValueLanguage("language"));
 		enableTrackpadIncrements = builder.getBoolean("trackpad_increments", false);
 		enableTrackpadScrolling = builder.getBoolean("trackpad_scrolling", false);
-		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F);
+		userIntefaceScale = builder.getFloat("ui_scale", 2F, 0F, 4F).slider(0.25D);
+		pixelArtSmoothing = builder.getBoolean("pixel_art_smoothing", true);
 		fov = builder.getFloat("fov", 40, 0, 180);
 		hsvColorPicker = builder.getBoolean("hsv_color_picker", true);
 		forceQwerty = builder.getBoolean("force_qwerty", false);
@@ -485,29 +530,34 @@ public class BBSSettings {
 		editorClipAutoName = builder.getBoolean("clip_auto_name", true);
 
 		builder.category("personalization", Icons.COLOR);
-		backgroundBrightness = builder.getFloat("background_brightness", DEFAULT_BACKGROUND_BRIGHTNESS, MIN_BACKGROUND_BRIGHTNESS, MAX_BACKGROUND_BRIGHTNESS);
+		backgroundBrightness = builder.getFloat("background_brightness", DEFAULT_BACKGROUND_BRIGHTNESS, MIN_BACKGROUND_BRIGHTNESS, MAX_BACKGROUND_BRIGHTNESS).slider();
 		interfaceShadows = builder.getBoolean("interface_shadows", true);
+		interfaceHighlights = builder.getBoolean("interface_highlights", false);
+		overlayBackgroundOpacity = builder.getFloat("overlay_background_opacity", DEFAULT_OVERLAY_BACKGROUND_OPACITY, 0F, 1F).slider();
+		overlayGradientBorder = builder.getBoolean("overlay_gradient_border", true);
 		primaryColor = builder.getInt("primary_color", DEFAULT_PRIMARY_COLOR).color();
 		stencilHighlightColor = builder.getInt("stencil_highlight_color", 0x2EFFFFFF).colorAlpha();
 		theme = builder.getInt("theme", DEFAULT_THEME);
-		editorTrackWidth = builder.getInt("track_width", 2, 1, 10);
+		editorTrackWidth = builder.getInt("track_width", 2, 1, 10).slider();
 		keyframeDefaultShape = builder.getInt("keyframe_default_shape", 0, 0, KeyframeShape.values().length - 1);
 
 		builder.category("transformation", Icons.SCALE);
 		gizmos = builder.getBoolean("gizmos", true);
-		axesScale = builder.getFloat("axes_scale", 3F, 0F, 10F);
-		axesThickness = builder.getFloat("axes_thickness", 0.5F, 0.25F, 3F);
+		axesScale = builder.getFloat("axes_scale", 2F, 0F, 10F).slider();
+		axesThickness = builder.getFloat("axes_thickness", 0.35F, 0.25F, 3F).slider();
 		axesKeepScreenSize = builder.getBoolean("axes_keep_screen_size", true);
 		rotate3dSphere = builder.getBoolean("rotate_3d_sphere", true);
-		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 1);
+		rotate3dSphereMode = builder.getInt("rotate_3d_sphere_mode", 0);
 		rotateHideRings = builder.getBoolean("rotate_hide_rings", false);
 		hideInactiveHandles = builder.getBoolean("hide_inactive_handles", true);
 		snapTranslate = builder.getFloat("snap_translate", 1F, 0.001F, 100F);
 		snapRotate = builder.getFloat("snap_rotate", 5F, 0.001F, 90F);
 		snapScale = builder.getFloat("snap_scale", 0.1F, 0.001F, 10F);
-		gizmoHoverTolerance = builder.getInt("gizmo_hover_tolerance", 8, 0, 40);
-		gizmoOpacity = builder.getFloat("gizmo_opacity", 1F, 0.05F, 1F);
+		gizmoHoverTolerance = builder.getInt("gizmo_hover_tolerance", 8, 0, 40).slider();
+		gizmoOpacity = builder.getFloat("gizmo_opacity", 1F, 0.05F, 1F).slider();
 		defaultLocalTransform = builder.getBoolean("default_local", false);
+		transformSpace = builder.getInt("transform_space", defaultLocalTransform.get() ? 0 : 3);
+		transformSpace.invisible();
 		transformHotkeys3dRay = builder.getBoolean("hotkeys_3d_ray", true);
 		poseMirrorEdit = builder.getBoolean("pose_mirror_edit", false);
 		poseMirrorEdit.invisible();
@@ -516,22 +566,22 @@ public class BBSSettings {
 		poseShowDisabledBones = builder.getBoolean("pose_show_disabled_bones", false);
 		translateHotkeyOrder = new ValueOrder("translate_hotkey_order", "screen", "x", "y", "z");
 		builder.register(translateHotkeyOrder);
-		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "x", "y", "z");
+		scaleHotkeyOrder = new ValueOrder("scale_hotkey_order", "all", "x", "y", "z");
 		builder.register(scaleHotkeyOrder);
 		rotateHotkeyOrder = new ValueOrder("rotate_hotkey_order", "view", "sphere", "x", "y", "z");
 		builder.register(rotateHotkeyOrder);
-		trackballSensitivity = builder.getFloat("trackball_sensitivity", 1F, 0.05F, 2F);
+		trackballSensitivity = builder.getFloat("trackball_sensitivity", 1F, 0.05F, 2F).slider();
 
 		builder.category("tutorials", Icons.HELP);
 		enableCursorRendering = builder.getBoolean("cursor", false);
 		enableMouseButtonRendering = builder.getBoolean("mouse_buttons", false);
 		enableKeystrokeRendering = builder.getBoolean("keystrokes", false);
-		keystrokeOffset = builder.getInt("keystrokes_offset", 10, 0, 20);
+		keystrokeOffset = builder.getInt("keystrokes_offset", 10, 0, 20).slider();
 		keystrokeMode = builder.getInt("keystrokes_position", 1);
 
 		builder.category("background", Icons.IMAGE);
 		backgroundImage = builder.getRL("image", null);
-		backgroundColor = builder.getInt("color", 0xff101217).colorAlpha();
+		backgroundColor = builder.getInt("color", 0x7b000000).colorAlpha();
 
 		builder.category("chroma_sky", Icons.GLOBE);
 		chromaSkyEnabled = builder.getBoolean("enabled", false);
@@ -540,9 +590,9 @@ public class BBSSettings {
 		chromaSkyBillboard = builder.getFloat("billboard", 0F, 0F, 256F);
 
 		builder.category("scrollbars", Icons.VERTICAL);
-		scrollbarWidth = builder.getInt("width", 4, 2, 10);
-		scrollingSensitivity = builder.getFloat("sensitivity", 1F, 0F, 10F);
-		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 1F, 0F, 10F);
+		scrollbarWidth = builder.getInt("width", 4, 2, 10).slider();
+		scrollingSensitivity = builder.getFloat("sensitivity", 3F, 0F, 10F).slider();
+		scrollingSensitivityHorizontal = builder.getFloat("sensitivity_horizontal", 3F, 0F, 10F).slider();
 		scrollingSmoothness = builder.getBoolean("smoothness", true);
 		scrollingDisableSmoothnessInEditors = builder.getBoolean("disable_smoothness_in_editors", false);
 
@@ -589,8 +639,11 @@ public class BBSSettings {
 		editorHorizontalFlight = builder.getBoolean("horizontal_flight", false);
 		editorOrbitMovementRequiresFlight = builder.getBoolean("orbit_movement_requires_flight", true);
 		editorOrbitCenterMarker = builder.getBoolean("orbit_center_marker", false);
+		editorOrbitGizmo = builder.getBoolean("orbit_gizmo", true);
+		editorOrbitGizmoScale = builder.getFloat("orbit_gizmo_scale", 1F, 0.5F, 2F).slider();
+		editorOrbitAxisOrtho = builder.getBoolean("orbit_axis_ortho", true);
 		editorOrbitTeleportOnSwitch = builder.getBoolean("orbit_teleport_on_switch", true);
-		editorCameraSmoothness = builder.getFloat("camera_smoothness", 0.1F, 0F, 0.95F);
+		editorCameraSmoothness = builder.getFloat("camera_smoothness", 0.1F, 0F, 0.95F).slider();
 		editorCameraMode = builder.getInt("camera_mode", 0, 0, 5);
 		editorCameraMode.invisible();
 		editorPlayerFollowsCamera = builder.getBoolean("player_follows_camera", false);
@@ -608,7 +661,8 @@ public class BBSSettings {
 		editorPreviewSizeMode = builder.getInt("preview_size_mode", 0, 0, 2);
 		editorPreviewCustomWidth = builder.getInt("preview_custom_width", 1280, 2, 16384);
 		editorPreviewCustomHeight = builder.getInt("preview_custom_height", 720, 2, 16384);
-		editorPreviewResolutionScale = builder.getFloat("preview_resolution_scale", 2F, 1F, 3F);
+		editorPreviewResolutionScale = builder.getFloat("preview_resolution_scale", 2F, 1F, 3F).slider();
+		editorKeepFrameOnExit = builder.getBoolean("keep_frame_on_exit", false);
 
 		builder.category("recording", Icons.FILM);
 		recordingCountdown = builder.getFloat("countdown", 1.5F, 0F, 30F);
@@ -634,9 +688,9 @@ public class BBSSettings {
 		builder.category("audio", Icons.SOUND);
 		audioWaveformVisibleInPreview = builder.getBoolean("waveform_visible_preview", true);
 		audioWaveformVisibleInKeyframes = builder.getBoolean("waveform_visible_keyframes", true);
-		audioWaveformDensity = builder.getInt("waveform_density", 20, 10, 100);
-		audioWaveformWidth = builder.getFloat("waveform_width", 0.8F, 0F, 1F);
-		audioWaveformHeight = builder.getInt("waveform_height", 24, 10, 40);
+		audioWaveformDensity = builder.getInt("waveform_density", 20, 10, 100).slider();
+		audioWaveformWidth = builder.getFloat("waveform_width", 0.8F, 0F, 1F).slider();
+		audioWaveformHeight = builder.getInt("waveform_height", 24, 10, 40).slider();
 		audioWaveformFilename = builder.getBoolean("waveform_filename", false);
 		audioWaveformTime = builder.getBoolean("waveform_time", false);
 		audioWaveformPreviewCombined = builder.getBoolean("waveform_preview_combined", false);
