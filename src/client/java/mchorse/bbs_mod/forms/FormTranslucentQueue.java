@@ -122,7 +122,7 @@ public class FormTranslucentQueue
     public static boolean needsSplit(ShaderProgram shader, StencilMap stencilMap, Texture texture, float alpha)
     {
         return alpha >= 1F && texture != null && texture.hasTranslucency()
-            && isActive() && stencilMap == null && shader.getUniform("PassMode") != null;
+                && isActive() && stencilMap == null && shader.getUniform("PassMode") != null;
     }
 
     /**
@@ -312,7 +312,7 @@ public class FormTranslucentQueue
         Matrix4f full = new Matrix4f(modelView).mul(modelMatrix);
 
         return new Vector3f(full.m00(), full.m01(), full.m02())
-            .cross(full.m10(), full.m11(), full.m12());
+                .cross(full.m10(), full.m11(), full.m12());
     }
 
     public static abstract class DrawCommand
@@ -589,9 +589,11 @@ public class FormTranslucentQueue
         /**
          * The flat-form replay: a single quad (billboard, framebuffer screen, a label's parts)
          * deferred without depth writes, so it never occludes what draws behind it. Solid
-         * geometry must not use this — see the explicit constructor below.
+         * geometry must not use this — see the explicit constructor below. The plane normal
+         * (see {@link #quadPlaneNormal}) switches the sort key to the quad-plane distance;
+         * null keeps the origin distance (a group's child, whose key is never consulted).
          */
-        public VertexBufferCommand(VertexBuffer buffer, Supplier<ShaderProgram> shader, Texture texture, Matrix4f modelView, Matrix3f normalMat, Vector3f cameraSpaceOrigin, boolean cull, Runnable preDraw, Runnable postDraw)
+        public VertexBufferCommand(VertexBuffer buffer, Supplier<ShaderProgram> shader, Texture texture, Matrix4f modelView, Matrix3f normalMat, Vector3f cameraSpaceOrigin, Vector3f cameraSpacePlaneNormal, boolean cull, Runnable preDraw, Runnable postDraw)
         {
             this(buffer, shader, PASS_TRANSLUCENT, false, texture, modelView, normalMat, cameraSpaceOrigin, cameraSpacePlaneNormal, cull, preDraw, postDraw);
         }

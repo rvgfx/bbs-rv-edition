@@ -2,6 +2,7 @@ package mchorse.bbs_mod.film;
 
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.data.types.BaseType;
+import mchorse.bbs_mod.film.replays.Inventory;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.film.replays.Replays;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
@@ -35,6 +36,7 @@ public class Film extends ValueGroup
     public final ValueFloat hunger = new ValueFloat("hunger", 20F);
     public final ValueInt xpLevel = new ValueInt("xp_level", 0);
     public final ValueFloat xpProgress = new ValueFloat("xp_progress", 0F);
+    public final Inventory inventory = new Inventory("inventory");
 
     /**
      * Radius (in blocks) around the player within which nearby mobs are captured
@@ -57,6 +59,7 @@ public class Film extends ValueGroup
         this.add(this.replayCategoryNames);
         this.add(this.markers);
 
+        this.add(this.inventory);
         this.add(this.hp);
         this.add(this.hunger);
         this.add(this.xpLevel);
