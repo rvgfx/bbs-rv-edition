@@ -11,14 +11,18 @@ import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.client.renderer.TriggerBlockEntityRenderer;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.PlaybackItemRenderer;
 import mchorse.bbs_mod.cubic.model.ModelManager;
+import mchorse.bbs_mod.events.BBSAddonMod;
 import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
 import mchorse.bbs_mod.events.register.RegisterL10nEvent;
 import mchorse.bbs_mod.film.Films;
@@ -73,6 +77,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.impl.client.rendering.BlockEntityRendererRegistryImpl;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
@@ -368,6 +373,15 @@ public class BBSModClient implements ClientModInitializer
     @Override
     public void onInitializeClient()
     {
+        /* The client half of the addons, picked up before anything client side is posted. Their
+         * common half is registered by BBSMod, from the "bbs-addon" entrypoint. */
+        FabricLoader.getInstance()
+            .getEntrypointContainers("bbs-client-addon", BBSAddonMod.class)
+            .forEach((container) ->
+            {
+                BBSMod.events.register(container.getEntrypoint());
+            });
+
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) ->
         {
             if (world.getBlockEntity(pos) instanceof TriggerBlockEntity)
@@ -392,9 +406,13 @@ public class BBSModClient implements ClientModInitializer
         sounds = new SoundManager(provider);
         l10n = new L10n();
         l10n.register((lang) -> Collections.singletonList(Link.assets("strings/" + lang + ".json")));
-        l10n.reload();
 
+        /* Addons add their own language files here, so the event goes out before the load and not
+         * after it — otherwise every addon label would show its raw key until the next language
+         * switch, or every addon would have to reload the whole thing a second time. */
         BBSMod.events.post(new RegisterL10nEvent(l10n));
+
+        l10n.reload();
 
         File parentFile = BBSMod.getSettingsFolder().getParentFile();
 
@@ -559,6 +577,11 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
+        /* The procedural animator poses actor arms from the film's use state
+         * (a drawn bow, a raised shield), and that state is computed here on
+         * the client - hand it the lookup. */
+        ItemUsePose.setSource(ThirdPersonItemUse::get);
+
         WorldRenderEvents.LAST.register((context) ->
         {
             if (videoRecorder.isRecording() && BBSRendering.canRender)
@@ -586,6 +609,10 @@ public class BBSModClient implements ClientModInitializer
 
         ClientTickEvents.START_CLIENT_TICK.register((client) ->
         {
+            /* The frame is over: outside of drawing, the player is themselves
+             * again and nothing of the film's use answers for them */
+            LivePlayerItemUse.endFrame();
+
             BBSRendering.startTick();
             BBSRendering.capturedTriggerBlocks.clear();
         });

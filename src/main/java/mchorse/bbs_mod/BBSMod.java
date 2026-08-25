@@ -11,6 +11,7 @@ import mchorse.bbs_mod.actions.types.blocks.PlaceBlockActionClip;
 import mchorse.bbs_mod.actions.types.chat.ChatActionClip;
 import mchorse.bbs_mod.actions.types.chat.CommandActionClip;
 import mchorse.bbs_mod.actions.types.item.ItemDropActionClip;
+import mchorse.bbs_mod.actions.types.item.ReleaseUseItemActionClip;
 import mchorse.bbs_mod.actions.types.item.UseBlockItemActionClip;
 import mchorse.bbs_mod.actions.types.item.UseItemActionClip;
 import mchorse.bbs_mod.blocks.ModelBlock;
@@ -157,22 +158,22 @@ public class BBSMod implements ModInitializer
     private static MapFactory<Clip, ClipFactoryData> factoryActionClips;
 
     public static final EntityType<ActorEntity> ACTOR_ENTITY = Registry.register(
-            Registries.ENTITY_TYPE,
-            new Identifier(MOD_ID, "actor"),
-            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ActorEntity::new)
-                    .dimensions(EntityDimensions.fixed(0.6F, 1.8F))
-                    .trackRangeBlocks(256)
-                    .trackedUpdateRate(1)
-                    .build());
+        Registries.ENTITY_TYPE,
+        new Identifier(MOD_ID, "actor"),
+        FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ActorEntity::new)
+            .dimensions(EntityDimensions.fixed(0.6F, 1.8F))
+            .trackRangeBlocks(256)
+            .trackedUpdateRate(1)
+            .build());
 
     public static final EntityType<GunProjectileEntity> GUN_PROJECTILE_ENTITY = Registry.register(
-            Registries.ENTITY_TYPE,
-            new Identifier(MOD_ID, "gun_projectile"),
-            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, GunProjectileEntity::new)
-                    .dimensions(EntityDimensions.fixed(0.25F, 0.25F))
-                    .trackRangeChunks(24)
-                    .trackedUpdateRate(1)
-                    .build());
+        Registries.ENTITY_TYPE,
+        new Identifier(MOD_ID, "gun_projectile"),
+        FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, GunProjectileEntity::new)
+            .dimensions(EntityDimensions.fixed(0.25F, 0.25F))
+            .trackRangeChunks(24)
+            .trackedUpdateRate(1)
+            .build());
 
     public static final Block MODEL_BLOCK = new ModelBlock(FabricBlockSettings.create()
             .noBlockBreakParticles()
@@ -214,9 +215,9 @@ public class BBSMod implements ModInitializer
     public static final GameRules.Key<GameRules.BooleanRule> BBS_EDITING_RULE = GameRuleRegistry.register("bbsEditing", GameRules.Category.MISC, GameRuleFactory.createBooleanRule(true));
 
     public static final BlockEntityType<ModelBlockEntity> MODEL_BLOCK_ENTITY = Registry.register(
-            Registries.BLOCK_ENTITY_TYPE,
-            new Identifier(MOD_ID, "model_block_entity"),
-            FabricBlockEntityTypeBuilder.create(ModelBlockEntity::new, MODEL_BLOCK).build()
+        Registries.BLOCK_ENTITY_TYPE,
+        new Identifier(MOD_ID, "model_block_entity"),
+        FabricBlockEntityTypeBuilder.create(ModelBlockEntity::new, MODEL_BLOCK).build()
     );
 
     public static final BlockEntityType<TriggerBlockEntity> TRIGGER_BLOCK_ENTITY = Registry.register(
@@ -259,10 +260,10 @@ public class BBSMod implements ModInitializer
     private static Block createChromaBlock()
     {
         return new Block(FabricBlockSettings.create()
-                .noBlockBreakParticles()
-                .dropsNothing()
-                .requiresTool()
-                .strength(-1F, 3600000F));
+            .noBlockBreakParticles()
+            .dropsNothing()
+            .requiresTool()
+            .strength(-1F, 3600000F));
     }
 
     private static ItemStack createModelBlockStack(Link texture)
@@ -405,11 +406,11 @@ public class BBSMod implements ModInitializer
         assetsFolder.mkdirs();
 
         FabricLoader.getInstance()
-                .getEntrypointContainers("bbs-addon", BBSAddonMod.class)
-                .forEach((container) ->
-                {
-                    events.register(container.getEntrypoint());
-                });
+            .getEntrypointContainers("bbs-addon", BBSAddonMod.class)
+            .forEach((container) ->
+            {
+                events.register(container.getEntrypoint());
+            });
 
         actions = new ActionManager();
 
@@ -424,18 +425,18 @@ public class BBSMod implements ModInitializer
         settings = new SettingsManager();
         forms = new FormArchitect();
         forms
-                .register(Link.bbs("billboard"), BillboardForm.class, null)
-                .register(Link.bbs("label"), LabelForm.class, null)
-                .register(Link.bbs("model"), ModelForm.class, null)
-                .register(Link.bbs("particle"), ParticleForm.class, null)
-                .register(Link.bbs("extruded"), ExtrudedForm.class, null)
-                .register(Link.bbs("block"), BlockForm.class, null)
-                .register(Link.bbs("item"), ItemForm.class, null)
-                .register(Link.bbs("anchor"), AnchorForm.class, null)
-                .register(Link.bbs("mob"), MobForm.class, null)
-                .register(Link.bbs("vanilla_particles"), VanillaParticleForm.class, null)
-                .register(Link.bbs("trail"), TrailForm.class, null)
-                .register(Link.bbs("framebuffer"), FramebufferForm.class, null);
+            .register(Link.bbs("billboard"), BillboardForm.class, null)
+            .register(Link.bbs("label"), LabelForm.class, null)
+            .register(Link.bbs("model"), ModelForm.class, null)
+            .register(Link.bbs("particle"), ParticleForm.class, null)
+            .register(Link.bbs("extruded"), ExtrudedForm.class, null)
+            .register(Link.bbs("block"), BlockForm.class, null)
+            .register(Link.bbs("item"), ItemForm.class, null)
+            .register(Link.bbs("anchor"), AnchorForm.class, null)
+            .register(Link.bbs("mob"), MobForm.class, null)
+            .register(Link.bbs("vanilla_particles"), VanillaParticleForm.class, null)
+            .register(Link.bbs("trail"), TrailForm.class, null)
+            .register(Link.bbs("framebuffer"), FramebufferForm.class, null);
 
         films = new FilmManager(() -> new File(worldFolder, "bbs/films"));
 
@@ -471,17 +472,18 @@ public class BBSMod implements ModInitializer
                 .register(Link.bbs("dolly_zoom"), DollyZoomClip.class, new ClipFactoryData(Icons.FILTER, 0x7d56c9));
 
         factoryActionClips = new MapFactory<Clip, ClipFactoryData>()
-                .register(Link.bbs("chat"), ChatActionClip.class, new ClipFactoryData(Icons.BUBBLE, Colors.YELLOW))
-                .register(Link.bbs("command"), CommandActionClip.class, new ClipFactoryData(Icons.PROPERTIES, Colors.ACTIVE))
-                .register(Link.bbs("place_block"), PlaceBlockActionClip.class, new ClipFactoryData(Icons.BLOCK, Colors.INACTIVE))
-                .register(Link.bbs("interact_block"), InteractBlockActionClip.class, new ClipFactoryData(Icons.FULLSCREEN, Colors.MAGENTA))
-                .register(Link.bbs("break_block"), BreakBlockActionClip.class, new ClipFactoryData(Icons.BULLET, Colors.GREEN))
-                .register(Link.bbs("use_item"), UseItemActionClip.class, new ClipFactoryData(Icons.POINTER, Colors.BLUE))
-                .register(Link.bbs("use_block_item"), UseBlockItemActionClip.class, new ClipFactoryData(Icons.BUCKET, Colors.CYAN))
-                .register(Link.bbs("drop_item"), ItemDropActionClip.class, new ClipFactoryData(Icons.ARROW_DOWN, Colors.DEEP_PINK))
-                .register(Link.bbs("attack"), AttackActionClip.class, new ClipFactoryData(Icons.DROP, Colors.RED))
-                .register(Link.bbs("damage"), DamageActionClip.class, new ClipFactoryData(Icons.SKULL, Colors.CURSOR))
-                .register(Link.bbs("swipe"), SwipeActionClip.class, new ClipFactoryData(Icons.LIMB, Colors.ORANGE));
+            .register(Link.bbs("chat"), ChatActionClip.class, new ClipFactoryData(Icons.BUBBLE, Colors.YELLOW))
+            .register(Link.bbs("command"), CommandActionClip.class, new ClipFactoryData(Icons.PROPERTIES, Colors.ACTIVE))
+            .register(Link.bbs("place_block"), PlaceBlockActionClip.class, new ClipFactoryData(Icons.BLOCK, Colors.INACTIVE))
+            .register(Link.bbs("interact_block"), InteractBlockActionClip.class, new ClipFactoryData(Icons.FULLSCREEN, Colors.MAGENTA))
+            .register(Link.bbs("break_block"), BreakBlockActionClip.class, new ClipFactoryData(Icons.BULLET, Colors.GREEN))
+            .register(Link.bbs("use_item"), UseItemActionClip.class, new ClipFactoryData(Icons.POINTER, Colors.BLUE))
+            .register(Link.bbs("use_block_item"), UseBlockItemActionClip.class, new ClipFactoryData(Icons.BUCKET, Colors.CYAN))
+            .register(Link.bbs("release_use_item"), ReleaseUseItemActionClip.class, new ClipFactoryData(Icons.ARROW_UP, 0x9457ff))
+            .register(Link.bbs("drop_item"), ItemDropActionClip.class, new ClipFactoryData(Icons.ARROW_DOWN, Colors.DEEP_PINK))
+            .register(Link.bbs("attack"), AttackActionClip.class, new ClipFactoryData(Icons.DROP, Colors.RED))
+            .register(Link.bbs("damage"), DamageActionClip.class, new ClipFactoryData(Icons.SKULL, Colors.CURSOR))
+            .register(Link.bbs("swipe"), SwipeActionClip.class, new ClipFactoryData(Icons.LIMB, Colors.ORANGE));
 
         setupConfig(Icons.SETTINGS, "bbs", new File(settingsFolder, "bbs.json"), BBSSettings::register);
 
