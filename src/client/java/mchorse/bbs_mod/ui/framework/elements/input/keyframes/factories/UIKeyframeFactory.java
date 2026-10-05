@@ -83,6 +83,7 @@ public abstract class UIKeyframeFactory <T> extends UIElement
         register(KeyframeFactories.ACTIONS_CONFIG, UIActionsConfigKeyframeFactory::new);
         register(KeyframeFactories.SHAPE_KEYS, UIShapeKeysKeyframeFactory::new);
         register(KeyframeFactories.PARTICLE_SETTINGS, UIParticleSettingsKeyframeFactory::new);
+        register(KeyframeFactories.LENS_RADIUS_SETTINGS, UILensRadiusSettingsKeyframeFactory::new);
 
         registerProperty("model", UIModelKeyframeFactory::new);
     }

@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.film;
 
 import mchorse.bbs_mod.camera.clips.misc.ImageClip;
 import mchorse.bbs_mod.camera.clips.misc.SubtitleClip;
+import mchorse.bbs_mod.client.screen.ScreenEffectRenderer;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 import net.minecraft.client.util.math.MatrixStack;
@@ -32,6 +33,8 @@ public class FrameOverlays
      */
     public static void setup()
     {
+        /* Grading first: it rewrites the frame, and the text and images after it should not be graded */
+        register(ScreenEffectRenderer::render);
         register((stack, batcher, context) -> UIImageRenderer.renderImages(stack, batcher, ImageClip.getImages(context)));
         register((stack, batcher, context) -> UISubtitleRenderer.renderSubtitles(stack, batcher, SubtitleClip.getSubtitles(context)));
     }

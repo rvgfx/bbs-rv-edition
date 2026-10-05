@@ -8,6 +8,15 @@ import mchorse.bbs_mod.utils.interps.Lerps;
 
 public abstract class CameraClip extends Clip
 {
+    /**
+     * Whether this clip moves the camera. Ones that don't (screen effects) fade with the
+     * envelope inside {@link #applyClip} themselves, so the position isn't lerped for them.
+     */
+    public boolean isPositionClip()
+    {
+        return true;
+    }
+
     public void shutdown(ClipContext context)
     {}
 
@@ -30,7 +39,7 @@ public abstract class CameraClip extends Clip
 
         float factor = this.envelope.factorEnabled(this.duration.get(), context.relativeTick + context.transition);
 
-        if (factor == 1)
+        if (factor == 1 || !this.isPositionClip())
         {
             this.applyClip(context, position);
         }

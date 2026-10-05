@@ -135,6 +135,10 @@ public class UIKeys
     public static final IKey CAMERA_PANELS_FOV = L10n.lang("bbs.ui.camera.panels.fov");
     public static final IKey CAMERA_PANELS_INTERPOLATION = L10n.lang("bbs.ui.camera.panels.interpolation");
     public static final IKey CAMERA_PANELS_KEYFRAMES = L10n.lang("bbs.ui.camera.panels.keyframes");
+    public static final IKey SCREEN_PANELS_OVERLAY_COLOR = L10n.lang("bbs.ui.screen_panels.overlay_color");
+    public static final IKey CAMERA_CLIPS_CHANNEL_FISHEYE_RADIUS_X = L10n.lang("bbs.ui.camera.clips.channel.fisheye_radius_x");
+    public static final IKey CAMERA_CLIPS_CHANNEL_FISHEYE_RADIUS_Y = L10n.lang("bbs.ui.camera.clips.channel.fisheye_radius_y");
+    public static final IKey CAMERA_CLIPS_CHANNEL_FISHEYE_RADIUS_LINK = L10n.lang("bbs.ui.camera.clips.channel.fisheye_radius_link");
     public static final IKey CAMERA_PANELS_LAYER = L10n.lang("bbs.ui.camera.panels.layer");
     public static final IKey CAMERA_PANELS_LOOK_AT = L10n.lang("bbs.ui.camera.panels.look_at");
     public static final IKey CAMERA_PANELS_MATH = L10n.lang("bbs.ui.camera.panels.math");
@@ -1873,6 +1877,9 @@ public class UIKeys
     public static final IKey WORLD_KEYS_CYCLE_PANELS = L10n.lang("bbs.ui.world.keys.cycle_panels");
 
     /* Key collections */
+    /** Channel titles of the screen effect clips (color grade, cinematic, grain), by channel id */
+    public static final KeyCollection C_SCREEN_CHANNEL = new KeyCollection("bbs.ui.camera.clips.channel.^");
+
     public static final KeyCollection C_CLIP = new KeyCollection("bbs.ui.camera.clips.^")
         .load(BBSMod.getFactoryCameraClips().getStringKeys())
         .load(BBSMod.getFactoryActionClips().getStringKeys());

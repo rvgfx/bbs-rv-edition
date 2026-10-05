@@ -432,6 +432,10 @@ public class BBSRendering
         {
             DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
             Batcher2D batcher = new Batcher2D(drawContext);
+
+            /* Before the hotbar, so the color grade doesn't reach it - same order as the editor's */
+            FrameOverlays.render(batcher.getContext().getMatrices(), batcher, controller.getContext());
+
             Window window = mc.getWindow();
             int overlayWidth = window.getScaledWidth();
             int overlayHeight = window.getScaledHeight();
@@ -443,7 +447,6 @@ public class BBSRendering
             renderHudOverlays(batcher, controller.getContext(), overlayWidth, overlayHeight);
 
             RenderSystem.setProjectionMatrix(cache, VertexSorter.BY_Z);
-            FrameOverlays.render(batcher.getContext().getMatrices(), batcher, controller.getContext());
         }
 
         if (!customSize)
