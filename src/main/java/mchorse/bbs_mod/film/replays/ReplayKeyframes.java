@@ -1,8 +1,11 @@
 package mchorse.bbs_mod.film.replays;
 
+import mchorse.bbs_mod.data.types.ListType;
+import mchorse.bbs_mod.forms.entities.EntityState;
 import mchorse.bbs_mod.forms.entities.IEntity;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
+import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.interps.IInterp;
 import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
@@ -15,7 +18,9 @@ import org.joml.Vector2d;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 public class ReplayKeyframes extends ValueGroup
 {
@@ -26,9 +31,55 @@ public class ReplayKeyframes extends ValueGroup
     public static final String GROUP_TRIGGERS = "triggers";
     public static final String GROUP_EXTRA1 = "extra1";
     public static final String GROUP_EXTRA2 = "extra2";
-    public static final String GROUP_TRANSFORM = "transform";
 
-    public static final List<String> CURATED_CHANNELS = Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw", "sneaking", "sprinting", "item_main_hand", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "grounded", "damage", "vX", "vY", "vZ");
+    /**
+     * Vanilla's per-tick gravity step (0.08 damped by 0.98). A grounded entity in
+     * vanilla spends every tick trying to fall by this much and colliding with the
+     * floor, which is what makes {@link net.minecraft.entity.Entity#move} flag it as
+     * on the ground. Keyframe playback teleports instead of walking, so the vertical
+     * delta is zero and vanilla concludes the entity is sliding through the air -
+     * killing step sounds, step game events and landing effects. Applying a frame
+     * with a grounded flag subtracts this from the movement delta as a probe; the
+     * exact frame position is snapped back right after, so it costs nothing
+     * positionally and doesn't inflate the step cadence (move zeroes the vertical
+     * component before accumulating the stride distance, unless the block is
+     * climbable).
+     */
+    public static final double GRAVITY_PROBE = 0.0784D;
+
+    /**
+     * Hotbar slots the replay records, one channel each. The item in the entity's main hand
+     * isn't stored anywhere: it's the slot {@link #selectedSlot} points at, which is what
+     * keeps a hotbar cell from having two owners.
+     */
+    public static final int HOTBAR_SIZE = 9;
+
+    /** Channel id of the hotbar slot at given index. */
+    public static String hotbarChannelId(int slot)
+    {
+        return "item_slot_" + slot;
+    }
+
+    public static final List<String> CURATED_CHANNELS = buildCuratedChannels();
+
+    /**
+     * The states sit together in one run rather than scattered through the list, so the timeline
+     * groups them the way {@link EntityState} does - and so adding a state doesn't mean
+     * remembering to name it here as well.
+     */
+    private static List<String> buildCuratedChannels()
+    {
+        List<String> channels = new ArrayList<>(Arrays.asList("x", "y", "z", "pitch", "yaw", "headYaw", "bodyYaw"));
+
+        for (EntityState state : EntityState.values())
+        {
+            channels.add(state.id);
+        }
+
+        channels.addAll(Arrays.asList("item_slot_0", "item_slot_1", "item_slot_2", "item_slot_3", "item_slot_4", "item_slot_5", "item_slot_6", "item_slot_7", "item_slot_8", "item_off_hand", "item_head", "item_chest", "item_legs", "item_feet", "selected_slot", "stick_lx", "stick_ly", "stick_rx", "stick_ry", "trigger_l", "trigger_r", "extra1_x", "extra1_y", "extra2_x", "extra2_y", "damage", "vX", "vY", "vZ"));
+
+        return channels;
+    }
 
     public final KeyframeChannel<Double> x = new KeyframeChannel<>("x", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> y = new KeyframeChannel<>("y", KeyframeFactories.DOUBLE);
@@ -43,11 +94,26 @@ public class ReplayKeyframes extends ValueGroup
     public final KeyframeChannel<Double> headYaw = new KeyframeChannel<>("headYaw", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> bodyYaw = new KeyframeChannel<>("bodyYaw", KeyframeFactories.DOUBLE);
 
-    public final KeyframeChannel<Double> sneaking = new KeyframeChannel<>("sneaking", KeyframeFactories.DOUBLE);
-    public final KeyframeChannel<Double> sprinting = new KeyframeChannel<>("sprinting", KeyframeFactories.DOUBLE);
-    public final KeyframeChannel<Double> grounded = new KeyframeChannel<>("grounded", KeyframeFactories.DOUBLE);
+    /**
+     * One channel per {@link EntityState}, keyed by the state and named after it. The fields
+     * below are the same channels under the names the rest of the mod already asks for.
+     */
+    public final Map<EntityState, KeyframeChannel<Double>> states = new EnumMap<>(EntityState.class);
+
+    public final KeyframeChannel<Double> sneaking = this.state(EntityState.SNEAKING);
+    public final KeyframeChannel<Double> sprinting = this.state(EntityState.SPRINTING);
+    public final KeyframeChannel<Double> grounded = this.state(EntityState.GROUNDED);
     public final KeyframeChannel<Double> fall = new KeyframeChannel<>("fall", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> damage = new KeyframeChannel<>("damage", KeyframeFactories.DOUBLE);
+
+    /**
+     * Two states vanilla counts up a tick at a time rather than switching: how far the body has
+     * leant into a swim, and how long a glide or a riptide has been going (which ramps the
+     * elytra's dive). A timeline is random access - scrub into the middle of a swim and there
+     * were no ticks to count - so they are written down like everything else instead of derived.
+     */
+    public final KeyframeChannel<Double> leaning = new KeyframeChannel<>("leaning", KeyframeFactories.DOUBLE);
+    public final KeyframeChannel<Double> roll = new KeyframeChannel<>("roll", KeyframeFactories.DOUBLE);
 
     public final KeyframeChannel<Double> stickLeftX = new KeyframeChannel<>("stick_lx", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> stickLeftY = new KeyframeChannel<>("stick_ly", KeyframeFactories.DOUBLE);
@@ -62,7 +128,8 @@ public class ReplayKeyframes extends ValueGroup
     public final KeyframeChannel<Double> extra2X = new KeyframeChannel<>("extra2_x", KeyframeFactories.DOUBLE);
     public final KeyframeChannel<Double> extra2Y = new KeyframeChannel<>("extra2_y", KeyframeFactories.DOUBLE);
 
-    public final KeyframeChannel<ItemStack> mainHand = new KeyframeChannel<>("item_main_hand", KeyframeFactories.ITEM_STACK);
+    public final List<KeyframeChannel<ItemStack>> hotbar = new ArrayList<>();
+
     public final KeyframeChannel<ItemStack> offHand = new KeyframeChannel<>("item_off_hand", KeyframeFactories.ITEM_STACK);
     public final KeyframeChannel<ItemStack> armorHead = new KeyframeChannel<>("item_head", KeyframeFactories.ITEM_STACK);
     public final KeyframeChannel<ItemStack> armorChest = new KeyframeChannel<>("item_chest", KeyframeFactories.ITEM_STACK);
@@ -84,11 +151,16 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.pitch);
         this.add(this.headYaw);
         this.add(this.bodyYaw);
-        this.add(this.sneaking);
-        this.add(this.sprinting);
-        this.add(this.grounded);
+
+        for (EntityState state : EntityState.values())
+        {
+            this.add(this.state(state));
+        }
+
         this.add(this.fall);
         this.add(this.damage);
+        this.add(this.leaning);
+        this.add(this.roll);
         this.add(this.stickLeftX);
         this.add(this.stickLeftY);
         this.add(this.stickRightX);
@@ -100,13 +172,26 @@ public class ReplayKeyframes extends ValueGroup
         this.add(this.extra2X);
         this.add(this.extra2Y);
 
-        this.add(this.mainHand);
+        for (int i = 0; i < HOTBAR_SIZE; i++)
+        {
+            KeyframeChannel<ItemStack> slot = new KeyframeChannel<>(hotbarChannelId(i), KeyframeFactories.ITEM_STACK);
+
+            this.hotbar.add(slot);
+            this.add(slot);
+        }
+
         this.add(this.offHand);
         this.add(this.armorHead);
         this.add(this.armorChest);
         this.add(this.armorLegs);
         this.add(this.armorFeet);
         this.add(this.selectedSlot);
+    }
+
+    /** The channel a state is recorded into, created on first ask. */
+    public KeyframeChannel<Double> state(EntityState state)
+    {
+        return this.states.computeIfAbsent(state, (s) -> new KeyframeChannel<>(s.id, KeyframeFactories.DOUBLE));
     }
 
     public List<KeyframeChannel<?>> getChannels()
@@ -122,6 +207,147 @@ public class ReplayKeyframes extends ValueGroup
         }
 
         return channels;
+    }
+
+    /** Equipment the replay dresses an entity in, beside the hotbar. */
+    public static final EquipmentSlot[] DRESS_SLOTS = {EquipmentSlot.OFFHAND, EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    public KeyframeChannel<ItemStack> getEquipmentChannel(EquipmentSlot slot)
+    {
+        switch (slot)
+        {
+            case OFFHAND: return this.offHand;
+            case HEAD: return this.armorHead;
+            case CHEST: return this.armorChest;
+            case LEGS: return this.armorLegs;
+            case FEET: return this.armorFeet;
+        }
+
+        return null;
+    }
+
+    /**
+     * Dress the entity for given tick: nine hotbar cells, the armour and the off hand.
+     *
+     * A channel with no keys says nothing, so its cell is left alone rather than emptied. That
+     * matters for films migrated from the old format, where only the cells the hand passed
+     * through were ever written down: the rest stay open, and whatever the world puts there
+     * during playback - an item picked up off the ground, say - stays visible, the way those
+     * films used to show it.
+     *
+     * The main hand is only handed over to those who keep it in a slot of its own - an actor,
+     * a mob, a preview stub. Where it's a view of the hotbar it has already been laid out, and
+     * writing it again would put the frame's item into whatever cell is selected at that
+     * instant - which, mid-switch, is still the previous one.
+     */
+    public void applyEquipment(float tick, IEntity entity)
+    {
+        for (int i = 0; i < HOTBAR_SIZE; i++)
+        {
+            KeyframeChannel<ItemStack> slot = this.hotbar.get(i);
+
+            if (!slot.isEmpty())
+            {
+                entity.setHotbarStack(i, slot.interpolate(tick, ItemStack.EMPTY));
+            }
+        }
+
+        if (!entity.isMainHandInHotbar())
+        {
+            entity.setEquipmentStack(EquipmentSlot.MAINHAND, this.getMainHandStack(tick));
+        }
+
+        for (EquipmentSlot slot : DRESS_SLOTS)
+        {
+            KeyframeChannel<ItemStack> channel = this.getEquipmentChannel(slot);
+
+            if (!channel.isEmpty())
+            {
+                entity.setEquipmentStack(slot, channel.interpolate(tick, ItemStack.EMPTY));
+            }
+        }
+    }
+
+    /** Whether the replay has anything to say about given hotbar cell. */
+    public boolean drivesHotbarSlot(int slot)
+    {
+        return !this.hotbar.get(slot).isEmpty();
+    }
+
+    /**
+     * The frame's dress packed for the wire: nine hotbar cells, then {@link #DRESS_SLOTS}.
+     * Used to hand a film's outfit to a player who isn't playing the film.
+     */
+    public ListType packEquipment(float tick)
+    {
+        ListType list = new ListType();
+
+        for (int i = 0; i < HOTBAR_SIZE; i++)
+        {
+            list.add(KeyframeFactories.ITEM_STACK.toData(this.hotbar.get(i).interpolate(tick, ItemStack.EMPTY)));
+        }
+
+        for (EquipmentSlot slot : DRESS_SLOTS)
+        {
+            list.add(KeyframeFactories.ITEM_STACK.toData(this.getEquipmentChannel(slot).interpolate(tick, ItemStack.EMPTY)));
+        }
+
+        return list;
+    }
+
+    public static void applyPackedEquipment(IEntity entity, ListType list)
+    {
+        for (int i = 0; i < HOTBAR_SIZE && i < list.size(); i++)
+        {
+            entity.setHotbarStack(i, KeyframeFactories.ITEM_STACK.fromData(list.get(i)));
+        }
+
+        for (int i = 0; i < DRESS_SLOTS.length; i++)
+        {
+            int index = HOTBAR_SIZE + i;
+
+            if (index < list.size())
+            {
+                entity.setEquipmentStack(DRESS_SLOTS[i], KeyframeFactories.ITEM_STACK.fromData(list.get(index)));
+            }
+        }
+    }
+
+    /**
+     * Hotbar slot the entity holds at given tick, clamped into the hotbar - the channel is
+     * free-form once a user edits it.
+     */
+    public int getSelectedSlot(float tick)
+    {
+        return MathUtils.clamp(this.selectedSlot.interpolate(tick), 0, HOTBAR_SIZE - 1);
+    }
+
+    /**
+     * What's in the main hand at given tick. Derived, not stored: the hand is whichever hotbar
+     * slot is selected.
+     */
+    public ItemStack getMainHandStack(float tick)
+    {
+        return this.hotbar.get(this.getSelectedSlot(tick)).interpolate(tick, ItemStack.EMPTY);
+    }
+
+    /**
+     * Recording writes an item key every tick, but a hotbar barely ever changes - so nearly
+     * all of those keys repeat the one before them, and item interpolation is stepped, which
+     * makes them free to drop. Called once a recording is done, this leaves one key per actual
+     * change and nothing else.
+     */
+    public void compressItemChannels()
+    {
+        for (KeyframeChannel<ItemStack> slot : this.hotbar)
+        {
+            slot.dropRepeats();
+        }
+
+        for (EquipmentSlot slot : DRESS_SLOTS)
+        {
+            this.getEquipmentChannel(slot).dropRepeats();
+        }
     }
 
     public void shift(float tick)
@@ -173,10 +399,14 @@ public class ReplayKeyframes extends ValueGroup
             this.fall.insert(tick, (double) entity.getFallDistance());
         }
 
-        this.sneaking.insert(tick, entity.isSneaking() ? 1D : 0D);
-        this.sprinting.insert(tick, entity.isSprinting() ? 1D : 0D);
-        this.grounded.insert(tick, entity.isOnGround() ? 1D : 0D);
+        for (EntityState state : EntityState.values())
+        {
+            this.state(state).insert(tick, state.get(entity) ? 1D : 0D);
+        }
+
         this.damage.insert(tick, (double) entity.getHurtTimer());
+        this.leaning.insert(tick, (double) entity.getLeaningPitch(1F));
+        this.roll.insert(tick, (double) entity.getRoll());
 
         if (rotation)
         {
@@ -220,7 +450,11 @@ public class ReplayKeyframes extends ValueGroup
 
         if (empty)
         {
-            this.mainHand.insert(tick, entity.getEquipmentStack(EquipmentSlot.MAINHAND).copy());
+            for (int i = 0; i < HOTBAR_SIZE; i++)
+            {
+                this.hotbar.get(i).insert(tick, entity.getHotbarStack(i).copy());
+            }
+
             this.offHand.insert(tick, entity.getEquipmentStack(EquipmentSlot.OFFHAND).copy());
             this.armorHead.insert(tick, entity.getEquipmentStack(EquipmentSlot.HEAD).copy());
             this.armorChest.insert(tick, entity.getEquipmentStack(EquipmentSlot.CHEST).copy());
@@ -235,10 +469,20 @@ public class ReplayKeyframes extends ValueGroup
         this.apply(tick, entity, null);
     }
 
+    public void apply(float tick, IEntity entity)
+    {
+        this.apply(tick, entity, null);
+    }
+
     /**
      * Apply a frame at given tick on the given entity.
      */
     public void apply(int tick, IEntity entity, List<String> groups)
+    {
+        this.apply((float) tick, entity, groups);
+    }
+
+    public void apply(float tick, IEntity entity, List<String> groups)
     {
         boolean empty = groups == null || groups.isEmpty();
         boolean position = empty || !groups.contains(GROUP_POSITION);
@@ -290,10 +534,14 @@ public class ReplayKeyframes extends ValueGroup
         }
 
         /* Motion and fall distance */
-        entity.setSneaking(this.sneaking.interpolate(tick) != 0D);
-        entity.setSprinting(this.sprinting.interpolate(tick) != 0D);
-        entity.setOnGround(this.grounded.interpolate(tick) != 0D);
+        for (EntityState state : EntityState.values())
+        {
+            state.set(entity, EntityState.isOn(this.state(state).interpolate(tick)));
+        }
+
         entity.setHurtTimer(this.damage.interpolate(tick).intValue());
+        entity.setLeaningPitch(this.leaning.interpolate(tick).floatValue());
+        entity.setRoll(this.roll.interpolate(tick).intValue());
 
         float[] sticks = entity.getExtraVariables();
 
@@ -327,18 +575,13 @@ public class ReplayKeyframes extends ValueGroup
             sticks[9] = this.extra2Y.interpolate(tick).floatValue();
         }
 
-        entity.setEquipmentStack(EquipmentSlot.MAINHAND, this.mainHand.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.OFFHAND, this.offHand.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.HEAD, this.armorHead.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.CHEST, this.armorChest.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.LEGS, this.armorLegs.interpolate(tick));
-        entity.setEquipmentStack(EquipmentSlot.FEET, this.armorFeet.interpolate(tick));
+        this.applyEquipment(tick, entity);
     }
 
     /**
      * Force teleportation for the previous keyframe being constant
      */
-    private Vector2d getPrev(KeyframeSegment<Double> frame, double prev, int tick)
+    private Vector2d getPrev(KeyframeSegment<Double> frame, double prev, float tick)
     {
         if (frame == null)
         {
@@ -359,7 +602,7 @@ public class ReplayKeyframes extends ValueGroup
             return new Vector2d(prev, prev);
         }
 
-        if (frame.preA != frame.a && frame.a.getTick() == tick && (frame.preA.getInterpolation().getInterp() == Interpolations.CONST || frame.preA.getInterpolation().getInterp() == Interpolations.STEP))
+        if (frame.preA != frame.a && frame.a.getTick() == tick - frame.timeOffset && (frame.preA.getInterpolation().getInterp() == Interpolations.CONST || frame.preA.getInterpolation().getInterp() == Interpolations.STEP))
         {
             if (interpolated != null)
             {

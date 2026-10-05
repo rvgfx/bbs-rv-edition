@@ -21,12 +21,34 @@ public interface IKeyframeFactory <T>
 
     public T copy(T value);
 
+    /**
+     * Whether this kind of value has no in-between states, so a new keyframe of
+     * it holds until the next one instead of fading into it (constant
+     * interpolation by default). True for things that jump - a stack in a slot,
+     * a block state, a toggle - where a fade would show a value that never
+     * existed.
+     */
+    public default boolean isStepped()
+    {
+        return false;
+    }
+
     public default T interpolate(Keyframe<T> preA, Keyframe<T> a, Keyframe<T> b, Keyframe<T> postB, IInterp interpolation, float x)
     {
         return this.interpolate(preA.getValue(), a.getValue(), b.getValue(), postB.getValue(), interpolation, x);
     }
 
     public T interpolate(T preA, T a, T b, T postB, IInterp interpolation, float x);
+
+    /**
+     * Content hash of a value: must change whenever the value's serialized form would. Signature
+     * checks call this per keyframe per frame, so hot value types override it with direct field
+     * mixing; the fallback keeps the serialize-and-hash semantics for the rare heavyweight types.
+     */
+    public default int contentHash(T value)
+    {
+        return String.valueOf(this.toData(value)).hashCode();
+    }
 
     public default double getY(T value)
     {

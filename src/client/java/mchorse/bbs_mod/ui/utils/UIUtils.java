@@ -1,7 +1,9 @@
 package mchorse.bbs_mod.ui.utils;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSMod;
 import mchorse.bbs_mod.BBSSettings;
+import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.utils.OS;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.PositionedSoundInstance;
@@ -9,6 +11,7 @@ import net.minecraft.sound.SoundEvents;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 
 public class UIUtils
 {
@@ -86,6 +89,39 @@ public class UIUtils
             e.printStackTrace();
 
             return false;
+        }
+    }
+
+    /**
+     * Map a GUI area to a framebuffer-pixel viewport and apply it. GUI units map
+     * to pixels by the window's scale factor, which since ui_scale became a float
+     * can be fractional — so no rounding of the scale itself, only of the final
+     * pixel edges. The window getters are the overridden ones during video
+     * export, so the same mapping holds there.
+     *
+     * @return {x, y, w, h} of the applied viewport, for building a matching projection
+     */
+    public static int[] viewportArea(Area area)
+    {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        float scale = (float) mc.getWindow().getScaleFactor();
+
+        int vx = Math.round(area.x * scale);
+        int vy = Math.round(mc.getWindow().getFramebufferHeight() - (area.y + area.h) * scale);
+        int vw = Math.round(area.w * scale);
+        int vh = Math.round(area.h * scale);
+
+        RenderSystem.viewport(vx, vy, vw, vh);
+
+        return new int[] {vx, vy, vw, vh};
+    }
+
+    /** Enable or disable every control in a container — the container stands, only its fields go quiet. */
+    public static void setEnabledDeep(UIElement container, boolean enabled)
+    {
+        for (UIElement element : container.getChildren(UIElement.class, new ArrayList<>(), false))
+        {
+            element.setEnabled(enabled);
         }
     }
 

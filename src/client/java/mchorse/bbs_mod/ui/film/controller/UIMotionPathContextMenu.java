@@ -2,13 +2,13 @@ package mchorse.bbs_mod.ui.film.controller;
 
 import mchorse.bbs_mod.settings.values.ui.ValueMotionPath;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -22,21 +22,21 @@ public class UIMotionPathContextMenu extends UIContextMenu
     public UIIcon around;
 
     public UIColor color;
-    public UITrackpad width;
+    public UISliderTrackpad width;
 
     public UIColor pastColor;
     public UIColor futureColor;
 
     public UIIcon frames;
-    public UITrackpad frameSize;
+    public UISliderTrackpad frameSize;
 
     public UIIcon keyframes;
     public UIColor keyframeColor;
-    public UITrackpad keyframeSize;
+    public UISliderTrackpad keyframeSize;
 
     public UIIcon current;
     public UIColor currentColor;
-    public UITrackpad currentSize;
+    public UISliderTrackpad currentSize;
 
     public UITrackpad before;
     public UITrackpad after;
@@ -53,16 +53,18 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
         this.enable = new UIIcon(() -> this.motionPath.enabled.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.enabled.toggle());
         this.enable.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_TITLE);
-        this.pin = new UIIcon(() -> this.panel.getController().isMotionPathPinned() ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.togglePin());
+        this.pin = new UIIcon(() -> this.panel.getController().motionPathPin.isPinned() ? Icons.LOCKED : Icons.UNLOCKED, (b) -> this.togglePin());
         this.pin.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_PIN);
         this.gradient = new UIIcon(Icons.GRAPH, (b) -> this.motionPath.gradient.toggle());
+        this.gradient.highlight(this.motionPath.gradient::get, Direction.BOTTOM);
         this.gradient.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_GRADIENT);
         this.around = new UIIcon(Icons.MAXIMIZE, (b) -> this.motionPath.aroundCurrent.toggle());
+        this.around.highlight(this.motionPath.aroundCurrent::get, Direction.BOTTOM);
         this.around.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_AROUND);
 
         this.color = new UIColor((c) -> this.motionPath.color.set(c));
         this.color.setColor(this.motionPath.color.get());
-        this.width = new UITrackpad((v) -> this.motionPath.width.set(v.floatValue()));
+        this.width = new UISliderTrackpad((v) -> this.motionPath.width.set(v.floatValue()));
         this.width.limit(0.005D, 0.5D, false).setValue(this.motionPath.width.get());
 
         this.pastColor = new UIColor((c) -> this.motionPath.pastColor.set(c));
@@ -72,21 +74,21 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
         this.frames = new UIIcon(() -> this.motionPath.frames.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.frames.toggle());
         this.frames.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_FRAMES);
-        this.frameSize = new UITrackpad((v) -> this.motionPath.frameSize.set(v.floatValue()));
+        this.frameSize = new UISliderTrackpad((v) -> this.motionPath.frameSize.set(v.floatValue()));
         this.frameSize.limit(0.005D, 0.5D, false).setValue(this.motionPath.frameSize.get());
 
         this.keyframes = new UIIcon(() -> this.motionPath.keyframes.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.keyframes.toggle());
         this.keyframes.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_KEYFRAMES);
         this.keyframeColor = new UIColor((c) -> this.motionPath.keyframeColor.set(c));
         this.keyframeColor.setColor(this.motionPath.keyframeColor.get());
-        this.keyframeSize = new UITrackpad((v) -> this.motionPath.keyframeSize.set(v.floatValue()));
+        this.keyframeSize = new UISliderTrackpad((v) -> this.motionPath.keyframeSize.set(v.floatValue()));
         this.keyframeSize.limit(0.005D, 0.5D, false).setValue(this.motionPath.keyframeSize.get());
 
         this.current = new UIIcon(() -> this.motionPath.current.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.motionPath.current.toggle());
         this.current.tooltip(UIKeys.FILM_CONTROLLER_MOTION_PATH_CURRENT);
         this.currentColor = new UIColor((c) -> this.motionPath.currentColor.set(c));
         this.currentColor.setColor(this.motionPath.currentColor.get());
-        this.currentSize = new UITrackpad((v) -> this.motionPath.currentSize.set(v.floatValue()));
+        this.currentSize = new UISliderTrackpad((v) -> this.motionPath.currentSize.set(v.floatValue()));
         this.currentSize.limit(0.005D, 0.5D, false).setValue(this.motionPath.currentSize.get());
 
         this.before = new UITrackpad((v) -> this.motionPath.before.set(v.intValue()));
@@ -111,7 +113,7 @@ public class UIMotionPathContextMenu extends UIContextMenu
 
     private void togglePin()
     {
-        this.panel.getController().toggleMotionPathPin();
+        this.panel.getController().motionPathPin.toggle();
     }
 
     @Override
@@ -126,21 +128,5 @@ public class UIMotionPathContextMenu extends UIContextMenu
         this.xy(context.mouseX(), context.mouseY())
             .wh(this.column.area.w, this.column.area.h)
             .bounds(context.menu.overlay, 5);
-    }
-
-    @Override
-    protected void renderBackground(UIContext context)
-    {
-        super.renderBackground(context);
-
-        if (this.motionPath.gradient.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.gradient.area, Direction.BOTTOM);
-        }
-
-        if (this.motionPath.aroundCurrent.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.around.area, Direction.BOTTOM);
-        }
     }
 }

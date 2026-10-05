@@ -11,6 +11,12 @@ import mchorse.bbs_mod.utils.keyframes.Keyframe;
 public class IntegerKeyframeFactory implements IKeyframeFactory<Integer>
 {
     @Override
+    public int contentHash(Integer value)
+    {
+        return value.hashCode();
+    }
+
+    @Override
     public Integer fromData(BaseType data)
     {
         return data.isNumeric() ? data.asNumeric().intValue() : 0;
@@ -26,6 +32,12 @@ public class IntegerKeyframeFactory implements IKeyframeFactory<Integer>
     public Integer createEmpty()
     {
         return 0;
+    }
+
+    @Override
+    public boolean isStepped()
+    {
+        return true;
     }
 
     @Override

@@ -1,15 +1,20 @@
 package mchorse.bbs_mod.ui.framework;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.ui.Keys;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
+import mchorse.bbs_mod.ui.framework.elements.IFocusedUIElement;
 import mchorse.bbs_mod.ui.framework.elements.IUIElement;
 import mchorse.bbs_mod.ui.framework.elements.IViewport;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.utils.IViewportStack;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.Gizmo;
+import mchorse.bbs_mod.ui.utils.InterfaceBlur;
 import mchorse.bbs_mod.ui.utils.renderers.InputRenderer;
-import mchorse.bbs_mod.utils.colors.Colors;
+import mchorse.bbs_mod.utils.MathUtils;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
 import org.lwjgl.glfw.GLFW;
@@ -72,9 +77,30 @@ public abstract class UIBaseMenu
 
         popka.keys().register(Keys.KEYBINDS, () -> this.context.toggleKeybinds());
         popka.keys().register(Keys.TRANSFORMATIONS_TOGGLE_AXES, () -> renderAxes = !renderAxes);
+        popka.keys().register(Keys.UI_SCALE_INC, () -> changeUIScale(0.25F));
+        popka.keys().register(Keys.UI_SCALE_DEC, () -> changeUIScale(-0.25F));
         this.root.add(popka);
 
         this.context.keybinds.relative(this.viewport).wh(0.5F, 1F);
+    }
+
+    /**
+     * Step the ui_scale setting from the keyboard shortcuts. When the setting is
+     * in the "use Minecraft's scale" mode (0), stepping starts from the actual
+     * on-screen scale instead of jumping to an unrelated stored value. The result
+     * stays in [0.5, 4], so the shortcuts can't accidentally fall back into the
+     * 0 = auto mode; the resize itself happens through the setting's callback.
+     */
+    private static void changeUIScale(float delta)
+    {
+        float current = BBSSettings.userIntefaceScale.get();
+
+        if (current <= 0F)
+        {
+            current = BBSModClient.getGUIScale();
+        }
+
+        BBSSettings.userIntefaceScale.set(MathUtils.clamp(current + delta, 0.5F, 4F));
     }
 
     public UIRootElement getRoot()
@@ -90,6 +116,30 @@ public abstract class UIBaseMenu
     public boolean canPause()
     {
         return true;
+    }
+
+    /**
+     * Who has taken the mouse over - the flight camera, while it flies itself around with the
+     * pointer hidden. Null when nobody has, which is the usual case.
+     *
+     * <p>While it is set, every mouse event goes to that element and to nothing else: the
+     * cursor is somewhere the user can't see, so a click let through to the interface would
+     * land on whatever the turning happened to sweep the cursor over - a context menu in the
+     * timeline, opened by a look downwards.</p>
+     */
+    public IUIElement getPointerOwner()
+    {
+        return null;
+    }
+
+    /**
+     * Whether the pointer is hidden, so there is no cursor on screen to draw anything beside -
+     * the tutorial mouse is drawn at the pointer, and a mouse floating around a cursor that
+     * isn't there is worse than no mouse at all.
+     */
+    public boolean isPointerHidden()
+    {
+        return this.getPointerOwner() != null;
     }
 
     public boolean canRefresh()
@@ -130,13 +180,26 @@ public abstract class UIBaseMenu
 
         this.context.setMouse(mouseX, mouseY, mouseButton);
 
+        IUIElement owner = this.getPointerOwner();
+
+        if (owner != null)
+        {
+            owner.mouseClicked(this.context);
+
+            return true;
+        }
+
         if (this.root.isEnabled())
         {
+            IFocusedUIElement focused = this.context.activeElement;
+
             this.context.pushViewport(this.viewport);
 
             IUIElement element = this.root.mouseClicked(this.context);
 
             this.context.popViewport();
+
+            this.unfocusClickedAway(focused, element, mouseButton);
 
             result = element != null;
         }
@@ -144,11 +207,61 @@ public abstract class UIBaseMenu
         return result;
     }
 
+    /**
+     * A left click that landed on anything but the focused element takes the
+     * focus away from it.
+     *
+     * The elements can't decide this on their own: the click stops at the first
+     * element that takes it, so a focused field never even hears about a click
+     * that landed on a neighbour — clicking empty space in the timeline used to
+     * leave a trackpad in text editing forever. Hence the check here, over the
+     * whole dispatch, where every click ends up.
+     *
+     * Compared by element rather than by coordinates on purpose: an element
+     * inside a scroll view is laid out in the content's coordinates, so its
+     * area can't be tested against the screen mouse from out here. And a click
+     * that moved the focus itself is left alone — that new focus is the point
+     * of the click, not something to undo.
+     *
+     * Only the left button: the other two are gestures a field answers itself
+     * (middle click negates a trackpad's value), and a right click is on its
+     * way to a context menu, which has no business submitting a half typed
+     * number behind it.
+     */
+    private void unfocusClickedAway(IFocusedUIElement focused, IUIElement element, int mouseButton)
+    {
+        if (focused == null || mouseButton != 0)
+        {
+            return;
+        }
+
+        if (this.context.activeElement != focused || element == focused)
+        {
+            return;
+        }
+
+        if (element instanceof UIElement && ((UIElement) focused).isDescendant((UIElement) element))
+        {
+            return;
+        }
+
+        this.context.unfocus();
+    }
+
     public boolean mouseScrolled(int x, int y, double v)
     {
         boolean result = false;
 
         this.context.setMouseWheel(x, y, v, this.context.mouseWheelHorizontal);
+
+        IUIElement owner = this.getPointerOwner();
+
+        if (owner != null)
+        {
+            owner.mouseScrolled(this.context);
+
+            return true;
+        }
 
         if (this.root.isEnabled())
         {
@@ -169,6 +282,15 @@ public abstract class UIBaseMenu
         boolean result = false;
 
         this.context.setMouse(mouseX, mouseY, mouseButton);
+
+        IUIElement owner = this.getPointerOwner();
+
+        if (owner != null)
+        {
+            owner.mouseReleased(this.context);
+
+            return true;
+        }
 
         if (this.root.isEnabled())
         {
@@ -235,11 +357,6 @@ public abstract class UIBaseMenu
         this.closeMenu();
     }
 
-    public void renderDefaultBackground()
-    {
-        this.context.batcher.box(0, 0, this.width, this.height, Colors.A50);
-    }
-
     public void renderMenu(UIRenderingContext context, int mouseX, int mouseY)
     {
         RenderSystem.depthFunc(GL11.GL_ALWAYS);
@@ -247,15 +364,20 @@ public abstract class UIBaseMenu
         this.context.resetMatrix();
         this.context.setMouse(mouseX, mouseY);
         this.context.resetCursor();
+        InterfaceBlur.beginFrame();
 
         this.preRenderMenu(context);
+
+        this.context.flushLayout();
 
         if (this.root.isVisible())
         {
             this.context.reset();
             this.context.pushViewport(this.viewport);
 
+            BBSProfiler.begin(BBSProfiler.Timer.UI_TOTAL);
             this.root.render(this.context);
+            BBSProfiler.end(BBSProfiler.Timer.UI_TOTAL);
 
             this.context.popViewport();
             this.context.postRender();

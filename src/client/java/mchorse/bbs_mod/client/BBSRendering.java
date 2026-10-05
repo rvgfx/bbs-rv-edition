@@ -9,25 +9,34 @@ import mchorse.bbs_mod.blocks.TriggerBlock;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.TriggerBlockEntity;
 import mchorse.bbs_mod.camera.clips.misc.*;
+import mchorse.bbs_mod.camera.clips.CameraClipContext;
+import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
-import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.events.TriggerBlockEntityUpdateCallback;
+import mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.WorldFilmController;
+import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.film.FrameOverlays;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.UIHotbarRenderer;
-import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.VideoRecorder;
+import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
+import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
 import mchorse.bbs_mod.utils.iris.ShaderCurves;
@@ -40,6 +49,8 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.WindowFramebuffer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.util.Window;
 import net.minecraft.client.util.math.MatrixStack;
@@ -80,6 +91,13 @@ public class BBSRendering
 
     private static int width;
     private static int height;
+
+    /* Orbit distance for the orthographic projection; negative = perspective.
+     * Cleared as the world render begins and re-armed by the film editor's
+     * orbit camera, which the same render sets up after that reset and before
+     * it builds its projection matrices, so the value can never go stale when
+     * another controller takes over. */
+    private static float orthoDistance = -1F;
 
     private static boolean toggleFramebuffer;
     private static Framebuffer framebuffer;
@@ -152,7 +170,13 @@ public class BBSRendering
 
     public static boolean canReplaceFramebuffer()
     {
-        return customSize && renderingWorld;
+        /* The world always renders at the export size. The interface (HUD) is drawn after the
+         * world but still into our export framebuffer — toggleFramebuffer stays on until the blit —
+         * so it must use the export size too. Otherwise it renders at the real window size and, when
+         * the window can't physically reach the requested resolution, comes out stretched in the
+         * file. Excluded while a BBS editor is open so the film panel's own UI keeps rendering at the
+         * real window size. */
+        return customSize && (renderingWorld || (toggleFramebuffer && UIScreen.getCurrentMenu() == null));
     }
 
     public static boolean isCustomSize()
@@ -354,7 +378,34 @@ public class BBSRendering
 
     public static void onWorldRenderBegin()
     {
+        if (orthoDistance > 0F)
+        {
+            /* Give back the culling disabled for the previous ortho frame
+             * (see setOrthoDistance); re-armed by the orbit if still on. */
+            MinecraftClient.getInstance().chunkCullingEnabled = true;
+
+            if (sodium)
+            {
+                SodiumUtils.restorePointCameraCulling();
+            }
+        }
+
+        orthoDistance = -1F;
+
         MinecraftClient mc = MinecraftClient.getInstance();
+
+        /* The frame boundary the profiler's counters roll over on; the flag is mirrored here
+         * so the hot-path checks read a plain static boolean. */
+        BBSProfiler.enabled = BBSSettings.profilerOverlay != null && BBSSettings.profilerOverlay.get();
+        BBSProfiler.frame();
+        RenderFrame.nextFrame();
+        Gizmo.INSTANCE.forgetPlacement();
+
+        /* The budgeted tail of model loading: VAO bakes for whatever the background loader
+         * finished, a few milliseconds' worth per frame instead of all of them at once. */
+        ModelSetupQueue.drain();
+
+        BBSModClient.getVideos().startFrame();
         BBSModClient.getFilms().startRenderFrame(mc.getTickDelta());
 
         UIBaseMenu menu = UIScreen.getCurrentMenu();
@@ -382,6 +433,10 @@ public class BBSRendering
         {
             DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
             Batcher2D batcher = new Batcher2D(drawContext);
+
+            /* Before the hotbar, so the color grade doesn't reach it - same order as the editor's */
+            FrameOverlays.render(batcher.getContext().getMatrices(), batcher, controller.getContext());
+
             Window window = mc.getWindow();
             int overlayWidth = window.getScaledWidth();
             int overlayHeight = window.getScaledHeight();
@@ -390,7 +445,6 @@ public class BBSRendering
 
             RenderSystem.setProjectionMatrix(ortho, VertexSorter.BY_Z);
 
-            UISubtitleRenderer.renderSubtitles(batcher.getContext().getMatrices(), batcher, SubtitleClip.getSubtitles(controller.getContext()));
             renderHudOverlays(batcher, controller.getContext(), overlayWidth, overlayHeight);
 
             RenderSystem.setProjectionMatrix(cache, VertexSorter.BY_Z);
@@ -409,6 +463,7 @@ public class BBSRendering
         {
             if (dashboard.getPanels().panel instanceof UIFilmPanel panel && panel.getData() != null)
             {
+                FrameOverlays.render(currentMenu.context.batcher.getContext().getMatrices(), currentMenu.context.batcher, panel.getRunner().getContext());
                 DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
                 Batcher2D batcher = new Batcher2D(drawContext);
                 Window window = mc.getWindow();
@@ -419,7 +474,6 @@ public class BBSRendering
 
                 RenderSystem.setProjectionMatrix(ortho, VertexSorter.BY_Z);
 
-                UISubtitleRenderer.renderSubtitles(batcher.getContext().getMatrices(), batcher, SubtitleClip.getSubtitles(panel.getRunner().getContext()));
                 renderHudOverlays(batcher, panel.getRunner().getContext(), overlayWidth, overlayHeight);
 
                 RenderSystem.setProjectionMatrix(cache, VertexSorter.BY_Z);
@@ -468,6 +522,8 @@ public class BBSRendering
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
 
+        renderRecordingOverlay();
+
         toggleFramebuffer(false);
 
         if (pendingExportResolutionAction != null)
@@ -503,29 +559,51 @@ public class BBSRendering
     public static void renderHud(DrawContext drawContext, float tickDelta)
     {
         Batcher2D batcher2D = new Batcher2D(drawContext);
-        VideoRecorder videoRecorder = BBSModClient.getVideoRecorder();
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+        StructureWand.renderHud(batcher2D);
+    }
 
-        if (BBSSettings.recordingOverlays.get() && UIScreen.getCurrentMenu() == null)
+    /**
+     * Draw the recording countdown / frame-counter overlay. This is operator UI: it is drawn from
+     * {@link #onRenderBeforeScreen()} after the export blit but before the buffer is copied to the
+     * screen, so it shows up on screen but is never captured into the file.
+     */
+    private static void renderRecordingOverlay()
+    {
+        if (!BBSSettings.recordingOverlays.get() || UIScreen.getCurrentMenu() != null)
         {
-            if (BBSModClient.isVideoExportDelayPending())
-            {
-                int countdown = Math.max(0, (int) Math.ceil(BBSModClient.getVideoExportDelayRemainingMs() / 50D));
-
-                renderRecordingTimerOverlay(batcher2D, String.valueOf(countdown / 20F));
-            }
-            else if (videoRecorder.isRecording())
-            {
-                int count = videoRecorder.getCounter();
-                String label = UIKeys.FILM_VIDEO_RECORDING.format(
-                    count,
-                    BBSModClient.getKeyRecordVideo().getBoundKeyLocalizedText().getString()
-                ).get();
-
-                renderRecordingTimerOverlay(batcher2D, label);
-            }
+            return;
         }
+
+        String label;
+
+        if (BBSModClient.isVideoExportDelayPending())
+        {
+            int countdown = Math.max(0, (int) Math.ceil(BBSModClient.getVideoExportDelayRemainingMs() / 50D));
+
+            label = String.valueOf(countdown / 20F);
+        }
+        else if (BBSModClient.getVideoRecorder().isRecording())
+        {
+            int count = BBSModClient.getVideoRecorder().getCounter();
+
+            label = UIKeys.FILM_VIDEO_RECORDING.format(
+                count,
+                BBSModClient.getKeyRecordVideo().getBoundKeyLocalizedText().getString()
+            ).get();
+        }
+        else
+        {
+            return;
+        }
+
+        MinecraftClient mc = MinecraftClient.getInstance();
+        DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
+
+        renderRecordingTimerOverlay(new Batcher2D(drawContext), label);
+
+        drawContext.draw();
     }
 
     public static void renderRecordingTimerOverlay(Batcher2D batcher2D, String label)
@@ -541,14 +619,48 @@ public class BBSRendering
         batcher2D.textCard(label, iconX + 3, y + 4, Colors.WHITE, Colors.A50);
     }
 
+    /** Whether the entity pass opened the render-last scope — false when one was already open. */
+    private static boolean entityPassRenderLast;
+
+    /**
+     * The world's entity pass: between these two calls vanilla draws the actors, model blocks
+     * and morphed players, and without a shader pack {@link #renderCoolStuff} draws the films
+     * at its end — one render-last scope spans it all, so a form set to render last draws after
+     * every other form of the frame. Under Iris the films run earlier, at the solid layer, in a
+     * scope of their own; this one still covers what the entity loop drew.
+     */
+    public static void beginEntityPass()
+    {
+        entityPassRenderLast = FormRenderLast.open();
+    }
+
+    public static void endEntityPass()
+    {
+        FormRenderLast.close(entityPassRenderLast);
+
+        entityPassRenderLast = false;
+    }
+
     public static void renderCoolStuff(WorldRenderContext worldRenderContext)
     {
-        if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
-        {
-            screen.renderInWorld(worldRenderContext);
-        }
+        /* A scope over everything drawn here, for when this runs on its own — under Iris, at the
+         * solid layer: forms set to render last draw when it closes, after the last replay, still
+         * in this pass. Inside the entity pass's scope this opens nothing and they wait for it. */
+        boolean renderLast = FormRenderLast.open();
 
-        BBSModClient.getFilms().render(worldRenderContext);
+        try
+        {
+            if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
+            {
+                screen.renderInWorld(worldRenderContext);
+            }
+
+            BBSModClient.getFilms().render(worldRenderContext);
+        }
+        finally
+        {
+            FormRenderLast.close(renderLast);
+        }
     }
 
     public static boolean isOptifinePresent()
@@ -561,6 +673,85 @@ public class BBSRendering
         return renderingWorld;
     }
 
+    /**
+     * Arm the orthographic projection for the current frame. Pass the orbit
+     * camera's distance to the pivot; negative disables. The value is reset
+     * at the beginning of every world render, so the caller must re-arm it
+     * each frame for as long as ortho should stay on.
+     */
+    public static void setOrthoDistance(float distance)
+    {
+        orthoDistance = distance;
+
+        if (distance > 0F)
+        {
+            /* The chunk occlusion culling walks sections outward from the
+             * camera POINT, which is only sound for a perspective projection —
+             * under ortho's parallel sightlines it over-culls sections near
+             * the screen edges. Disable it for the frame (Sodium honours the
+             * same flag); the frustum and render distance still cull. Sodium's
+             * own point-camera heuristics get the same treatment. */
+            MinecraftClient.getInstance().chunkCullingEnabled = false;
+
+            if (sodium)
+            {
+                SodiumUtils.disablePointCameraCulling();
+            }
+        }
+    }
+
+    public static boolean isOrthoActive()
+    {
+        return orthoDistance > 0F;
+    }
+
+    /**
+     * Build the orthographic projection replacing the given perspective one
+     * (returns the input untouched when ortho is not armed). FOV and aspect are
+     * derived from the perspective matrix itself, so the ortho frame height
+     * matches the perspective frame height at the orbit pivot's distance: the
+     * subject keeps its size when toggling projections, and the scroll zoom
+     * keeps working through the orbit distance.
+     *
+     * @param minHalfHeight a lower bound on the frame's half height, and the
+     *        slack behind the camera plane the near plane is given; the frustum
+     *        culling matrix is built with a loose bound on both, so culling
+     *        stays conservative when zoomed all the way in.
+     */
+    public static Matrix4f getOrthoProjection(GameRenderer renderer, Matrix4f perspective, float minHalfHeight)
+    {
+        if (orthoDistance <= 0F)
+        {
+            return perspective;
+        }
+
+        float tanHalfFov = 1F / perspective.m11();
+        float aspect = perspective.m11() / perspective.m00();
+        float halfHeight = Math.max(minHalfHeight, orthoDistance * tanHalfFov);
+        float halfWidth = halfHeight * aspect;
+
+        /* The near plane sits exactly at the camera, the way a perspective one
+         * effectively does: under ortho's parallel sightlines everything BEHIND
+         * the camera projects into the frame as well, so a hillside the camera
+         * stands in paints itself over the subject, and no amount of orbiting
+         * gets past it. Clipping at the camera plane drops precisely what the
+         * eye has already passed and nothing the eye still faces — pushing the
+         * plane any further in would slice the ground in front of the camera
+         * and leave a hole where it was. Zooming in walks the camera towards
+         * the pivot, so the zoom doubles as the control over how much of an
+         * obstacle in front gets cut.
+         *
+         * The far plane is the one vanilla builds its perspective with, which
+         * already bounds everything the game draws; together with the near
+         * plane it keeps the box tight enough for the frustum to cull with,
+         * which matters here because chunk occlusion culling is off (see
+         * setOrthoDistance). */
+        float near = -minHalfHeight;
+        float far = renderer.getFarPlaneDistance();
+
+        return new Matrix4f().setOrtho(-halfWidth, halfWidth, -halfHeight, halfHeight, near, far);
+    }
+
     public static boolean isIrisShadersEnabled()
     {
         if (!iris)
@@ -571,6 +762,28 @@ public class BBSRendering
         return IrisUtils.isShaderPackEnabled();
     }
 
+    /**
+     * Whether a shader pack is shading this very draw. Unlike {@link #isIrisShadersEnabled()}
+     * it turns off inside {@link #renderOffscreen(Runnable)}, where our own programs take over.
+     */
+    public static boolean isIrisWorldShadersEnabled()
+    {
+        return iris && renderingWorld && IrisUtils.shouldOverrideShaders();
+    }
+
+    /** Render into a framebuffer of ours: see {@link IrisUtils#renderOffscreen(Runnable)}. */
+    public static void renderOffscreen(Runnable render)
+    {
+        if (iris)
+        {
+            IrisUtils.renderOffscreen(render);
+        }
+        else
+        {
+            render.run();
+        }
+    }
+
     public static boolean isIrisShadowPass()
     {
         if (!iris)
@@ -579,6 +792,34 @@ public class BBSRendering
         }
 
         return IrisUtils.isShadowPass();
+    }
+
+    /**
+     * Hold the vertex layout Iris hands out steady while a render layer's buffer is uploaded
+     * outside of the immediate provider's own draw — the deferred translucent pass ends and
+     * uploads those buffers itself (see CustomVertexConsumerProvider#draw). Without it a form
+     * drawn where the level isn't rendering, like the form editor's viewport, gets its plain
+     * entity vertices read at Iris' extended stride and shreds into stretched triangles. Returns
+     * the previous state, to be handed back to {@link #endIrisBufferUpload(boolean)}.
+     */
+    public static boolean beginIrisBufferUpload(BufferBuilder builder)
+    {
+        if (!iris)
+        {
+            return false;
+        }
+
+        return IrisUtils.beginBufferUpload(builder);
+    }
+
+    public static void endIrisBufferUpload(boolean extended)
+    {
+        if (!iris)
+        {
+            return;
+        }
+
+        IrisUtils.endBufferUpload(extended);
     }
 
     /**
@@ -661,68 +902,35 @@ public class BBSRendering
 
     public static Long getTimeOfDay()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
+        Double value = getCurveValue(ShaderCurves.SUN_ROTATION, CurveClip::getValues);
 
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.SUN_ROTATION) : null;
-
-            if (v != null)
-            {
-                return (long) (v * 1000L);
-            }
-        }
-
-        return null;
+        return value == null ? null : (long) (value * 1000L);
     }
 
     public static Double getBrightness()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
-
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.BRIGHTNESS) : null;
-
-            if (v != null)
-            {
-                return v;
-            }
-        }
-
-        return null;
+        return getCurveValue(ShaderCurves.BRIGHTNESS, CurveClip::getValues);
     }
 
     public static Double getWeather()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
+        return getCurveValue(ShaderCurves.WEATHER, CurveClip::getValues);
+    }
 
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.WEATHER) : null;
+    public static float getSunHorizontalRotation()
+    {
+        Double value = getCurveValue(ShaderCurves.SUN_HORIZONTAL_ROTATION, CurveClip::getValues);
 
-            if (v != null)
-            {
-                return v;
-            }
-        }
-
-        return null;
+        return value == null ? 0F : value.floatValue();
     }
 
     public static Integer getChromaSkyColorArgb()
+    {
+        return getCurveValue(CurveClip.CHROMA_SKY_COLOR, CurveClip::getColorValues);
+    }
+
+    /** Camera work takes priority; films played without a camera supply missing values. */
+    private static <T> T getCurveValue(String key, Function<CameraClipContext, Map<String, T>> values)
     {
         if (!MinecraftClient.getInstance().isOnThread())
         {
@@ -731,11 +939,27 @@ public class BBSRendering
 
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
-            Map<String, Integer> values = CurveClip.getColorValues(controller.getContext());
+            T value = values.apply(controller.getContext()).get(key);
 
-            if (values != null)
+            if (value != null)
             {
-                return values.get(CurveClip.CHROMA_SKY_COLOR);
+                return value;
+            }
+        }
+
+        if (BBSModClient.getFilms() != null)
+        {
+            for (BaseFilmController controller : BBSModClient.getFilms().getControllers())
+            {
+                if (controller instanceof WorldFilmController worldFilm)
+                {
+                    T value = values.apply(worldFilm.getContext()).get(key);
+
+                    if (value != null)
+                    {
+                        return value;
+                    }
+                }
             }
         }
 

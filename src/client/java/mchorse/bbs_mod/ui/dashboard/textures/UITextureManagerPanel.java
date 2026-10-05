@@ -5,6 +5,7 @@ import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanel;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
+import mchorse.bbs_mod.ui.onboarding.TourAnchors;
 import mchorse.bbs_mod.utils.PNGEncoder;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.resources.Pixels;
@@ -12,6 +13,11 @@ import mchorse.bbs_mod.utils.resources.Pixels;
 import java.io.File;
 import java.io.IOException;
 
+/**
+ * Texture manager panel: a dashboard panel that hosts the same {@link UITexturePicker} browser used by
+ * the "select texture" pop-up, so the two are one unified texture browser. The picker owns the tab strip
+ * (tab 0 = files, further tabs = open textures), so editing happens right there via the pencil.
+ */
 public class UITextureManagerPanel extends UIDashboardPanel
 {
     public UITexturePicker picker;
@@ -71,10 +77,18 @@ public class UITextureManagerPanel extends UIDashboardPanel
         this.picker.fill(null);
 
         this.add(this.picker);
+
+        this.onAppear(this.picker::syncToSharedTabs);
+
+        /* What the tour of this panel points at */
+        TourAnchors.register("textures.browser", () -> this.picker.browser);
+        TourAnchors.register("textures.edit", () -> this.picker.edit);
+        TourAnchors.register("textures.tabs", () -> this.picker.topBar);
     }
 
     public Link getLink()
     {
         return this.picker.current;
     }
+
 }

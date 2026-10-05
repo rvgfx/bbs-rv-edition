@@ -53,6 +53,22 @@ public class ValueInt extends BaseValueNumber<Integer>
         return this.labels;
     }
 
+    @Override
+    public ValueInt slider()
+    {
+        super.slider();
+
+        return this;
+    }
+
+    @Override
+    public ValueInt slider(double step)
+    {
+        super.slider(step);
+
+        return this;
+    }
+
     public ValueInt subtype(Subtype subtype)
     {
         this.subtype = subtype;
@@ -95,5 +111,11 @@ public class ValueInt extends BaseValueNumber<Integer>
         COLOR,
         COLOR_ALPHA,
         MODES
+    }
+
+    @Override
+    public void setNumber(double value)
+    {
+        this.set((int) Math.round(value));
     }
 }

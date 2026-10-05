@@ -5,11 +5,12 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.IUIClipsDelegate;
 import mchorse.bbs_mod.ui.film.clips.widgets.UIBitToggle;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 public class UIDragClip extends UIClip<DragClip>
 {
     public UIToggle deterministic;
-    public UITrackpad factor;
+    public UISliderTrackpad factor;
     public UITrackpad rate;
     public UIBitToggle active;
 
@@ -23,24 +24,24 @@ public class UIDragClip extends UIClip<DragClip>
     {
         super.registerUI();
 
-        this.deterministic = new UIToggle(UIKeys.CAMERA_PANELS_DETERMINISTIC, (b) ->
+        this.deterministic = this.bind(new UIToggle(UIKeys.CAMERA_PANELS_DETERMINISTIC, (b) ->
         {
             this.clip.deterministic.set(b.getValue());
             this.clip.resetCache();
-        });
+        }), () -> this.deterministic.setValue(this.clip.deterministic.get()));
         this.deterministic.tooltip(UIKeys.CAMERA_PANELS_DETERMINISTIC_TOOLTIP);
 
-        this.factor = new UITrackpad((value) -> this.clip.factor.set(value.floatValue()));
+        this.factor = this.bind(new UISliderTrackpad((value) -> this.clip.factor.set(value.floatValue())), () -> this.factor.setValue(this.clip.factor.get()));
         this.factor.limit(this.clip.factor).values(0.05F, 0.01F, 0.2F).increment(0.1F).tooltip(UIKeys.CAMERA_PANELS_FACTOR_TOOLTIP);
 
-        this.rate = new UITrackpad((value) -> this.clip.rate.set(value.intValue()));
+        this.rate = this.trackpad(this.clip.rate);
         this.rate.limit(this.clip.rate).tooltip(UIKeys.CAMERA_PANELS_RATE_TOOLTIP);
 
-        this.active = new UIBitToggle((value) ->
+        this.active = this.bind(new UIBitToggle((value) ->
         {
             this.clip.active.set(value);
             this.clip.resetCache();
-        }).all();
+        }).all(), () -> this.active.setValue(this.clip.active.get()));
     }
 
     @Override
@@ -50,16 +51,5 @@ public class UIDragClip extends UIClip<DragClip>
 
         this.panels.add(this.section(UIKeys.C_CLIP.get("bbs:drag"), this.deterministic));
         this.panels.add(this.section(UIKeys.CAMERA_PANELS_FACTOR, this.factor, this.rate), this.active);
-    }
-
-    @Override
-    public void fillData()
-    {
-        super.fillData();
-
-        this.deterministic.setValue(this.clip.deterministic.get());
-        this.factor.setValue(this.clip.factor.get());
-        this.rate.setValue(this.clip.rate.get());
-        this.active.setValue(this.clip.active.get());
     }
 }

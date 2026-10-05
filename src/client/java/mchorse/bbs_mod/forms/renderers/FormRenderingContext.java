@@ -23,6 +23,7 @@ public class FormRenderingContext
     public boolean ui;
     public int color;
     public boolean modelRenderer;
+    public long modelRendererTick;
 
     public FormRenderingContext()
     {}
@@ -32,7 +33,23 @@ public class FormRenderingContext
         this.type = type == null ? FormRenderType.ENTITY : type;
         this.entity = entity;
         this.stack = stack;
-        this.world = new MatrixStack();
+
+        /* Reused, not reallocated: set() runs per replay per frame, and nothing retains the
+         * stack itself (readers snapshot matrices). The drain guards against a render that
+         * left it unbalanced. */
+        if (this.world == null)
+        {
+            this.world = new MatrixStack();
+        }
+        else
+        {
+            while (!this.world.isEmpty())
+            {
+                this.world.pop();
+            }
+
+            this.world.loadIdentity();
+        }
         this.light = light;
         this.overlay = overlay;
         this.transition = transition;
@@ -94,9 +111,20 @@ public class FormRenderingContext
         return this;
     }
 
-    public FormRenderingContext modelRenderer()
+    /**
+     * Mark this as a {@link mchorse.bbs_mod.ui.framework.elements.utils.UIModelRenderer}
+     * viewport and hand it that viewport's clock.
+     *
+     * <p>The tick is here because form ticking in an editor is opt-in
+     * ({@link mchorse.bbs_mod.ui.forms.editors.utils.UIPickableFormRenderer#updatable()})
+     * and off in the plain form editor. Anything that has to keep moving in a
+     * preview regardless &mdash; particles, say &mdash; cannot wait to be
+     * ticked and has to run off this instead.
+     */
+    public FormRenderingContext modelRenderer(long tick)
     {
         this.modelRenderer = true;
+        this.modelRendererTick = tick;
 
         return this;
     }

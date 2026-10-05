@@ -99,13 +99,13 @@ public class UIPlaybackPanel extends UIDashboardPanel
         this.container.add(this.titleLabel, this.filmSearch,
                 this.selectedFilmLabel, this.withCameraToggle, this.doneButton);
         this.add(this.container);
+        this.add(this.container);
+
+        this.onAppear(this::refreshFilms);
     }
 
-    @Override
-    public void appear()
+    private void refreshFilms()
     {
-        super.appear();
-
         UIDataUtils.requestNames(ContentType.FILMS, (names) ->
         {
             this.filmList.fill(names);

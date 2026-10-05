@@ -110,6 +110,24 @@ public class KeyframeSelection
         this.selected.remove(index);
     }
 
+    /**
+     * Keep the selection on the same keyframes after one was inserted into the channel at the
+     * given index. The selection is stored by index, so an insertion ahead of a selected keyframe
+     * would otherwise slide the selection onto its neighbour without a word.
+     */
+    public void shiftAfterInsert(int index)
+    {
+        Set<Integer> shifted = new LinkedHashSet<>();
+
+        for (Integer i : this.selected)
+        {
+            shifted.add(i >= index ? i + 1 : i);
+        }
+
+        this.selected.clear();
+        this.selected.addAll(shifted);
+    }
+
     public void removeSelected()
     {
         tmpIndices.clear();
@@ -124,11 +142,21 @@ public class KeyframeSelection
         this.selected.clear();
     }
 
+    /**
+     * The selection stores indices, so a channel edited underneath it (a removed keyframe, an
+     * undone insertion) can leave indices that no longer resolve. Skip those, like
+     * {@link #getSelected()} does, instead of reporting "nothing selected" on the first stale one.
+     */
     public Keyframe getFirst()
     {
         for (Integer integer : this.selected)
         {
-            return this.channel.get(integer);
+            Keyframe keyframe = this.channel.get(integer);
+
+            if (keyframe != null)
+            {
+                return keyframe;
+            }
         }
 
         return null;

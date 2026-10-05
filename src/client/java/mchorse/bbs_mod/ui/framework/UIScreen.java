@@ -2,6 +2,7 @@ package mchorse.bbs_mod.ui.framework;
 
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.PixelArt;
 import mchorse.bbs_mod.importers.IImportPathProvider;
 import mchorse.bbs_mod.importers.ImporterContext;
 import mchorse.bbs_mod.importers.Importers;
@@ -26,8 +27,6 @@ public class UIScreen extends Screen implements IFileDropListener
 {
     private UIBaseMenu menu;
     private UIRenderingContext context;
-
-    private int lastGuiScale;
 
     public static void open(UIBaseMenu menu)
     {
@@ -56,11 +55,6 @@ public class UIScreen extends Screen implements IFileDropListener
         this.context = new UIRenderingContext(new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers()));
 
         this.menu.context.setup(this.context);
-    }
-
-    public UIBaseMenu getMenu()
-    {
-        return this.menu;
     }
 
     public void update()
@@ -94,7 +88,7 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public void removed()
     {
-        MinecraftClient.getInstance().options.getGuiScale().setValue(this.lastGuiScale);
+        BBSModClient.setCustomGUIScale(false);
         MinecraftClient.getInstance().onResolutionChanged();
 
         super.removed();
@@ -110,9 +104,7 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public void onDisplayed()
     {
-        this.lastGuiScale = MinecraftClient.getInstance().options.getGuiScale().getValue();
-
-        MinecraftClient.getInstance().options.getGuiScale().setValue(BBSModClient.getGUIScale());
+        BBSModClient.setCustomGUIScale(true);
         MinecraftClient.getInstance().onResolutionChanged();
 
         super.onDisplayed();
@@ -150,7 +142,32 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button)
     {
-        return this.menu.mouseClicked((int) mouseX, (int) mouseY, button);
+        try
+        {
+            return this.menu.mouseClicked((int) mouseX, (int) mouseY, button);
+        }
+        catch (RuntimeException | Error e)
+        {
+            return this.report("mouse click", e);
+        }
+    }
+
+    /**
+     * Log a failure of an input handler before Minecraft wraps it into a crash report: building
+     * that report can itself fail (a mixin of another mod loading a class mid-transformation),
+     * and then the original stack is gone with it.
+     */
+    private boolean report(String action, Throwable e)
+    {
+        System.err.println("[BBS UI] Unhandled exception on " + action + " in " + this.menu.getClass().getSimpleName());
+        e.printStackTrace();
+
+        if (e instanceof RuntimeException runtime)
+        {
+            throw runtime;
+        }
+
+        throw (Error) e;
     }
 
     public void setHorizontal(double horizontal)
@@ -167,13 +184,27 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button)
     {
-        return this.menu.mouseReleased((int) mouseX, (int) mouseY, button);
+        try
+        {
+            return this.menu.mouseReleased((int) mouseX, (int) mouseY, button);
+        }
+        catch (RuntimeException | Error e)
+        {
+            return this.report("mouse release", e);
+        }
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers)
     {
-        return this.menu.handleKey(keyCode, scanCode, BBSRendering.lastAction, modifiers);
+        try
+        {
+            return this.menu.handleKey(keyCode, scanCode, BBSRendering.lastAction, modifiers);
+        }
+        catch (RuntimeException | Error e)
+        {
+            return this.report("key press", e);
+        }
     }
 
     @Override
@@ -197,11 +228,23 @@ public class UIScreen extends Screen implements IFileDropListener
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta)
     {
-        super.render(context, mouseX, mouseY, delta);
+        /* Text is drawn with vanilla's programs, which are shared with the
+         * world's text, so the pixel art ones are only allowed for the span
+         * where BBS's UI is what's being drawn */
+        PixelArt.setDrawingUI(true);
 
-        this.menu.context.setTransition(this.client.getTickDelta());
-        this.menu.renderMenu(this.context, mouseX, mouseY);
-        this.menu.context.render.executeRunnables();
+        try
+        {
+            super.render(context, mouseX, mouseY, delta);
+
+            this.menu.context.setTransition(this.client.getTickDelta());
+            this.menu.renderMenu(this.context, mouseX, mouseY);
+            this.menu.context.render.executeRunnables();
+        }
+        finally
+        {
+            PixelArt.setDrawingUI(false);
+        }
     }
 
     @Override

@@ -64,13 +64,25 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
     @Override
     public boolean renderGroup(BufferBuilder builder, MatrixStack stack, ModelGroup group, Model model)
     {
+        /* A group with shape-keyed meshes morphs per frame, so it gets no VAO and renders immediate —
+         * the rest of the model still bakes and rides the GPU (see ModelInstance#renderHybrid). */
+        for (ModelMesh mesh : group.meshes)
+        {
+            if (!mesh.data.isEmpty())
+            {
+                return false;
+            }
+        }
+
         /* Split a group's geometry by material so each material can be drawn with its own
-         * texture: cubes belong to the default material (""), meshes to their own. */
+         * texture: a cube or a mesh belongs to the material it names, the default ("") otherwise. */
         Map<String, MaterialBucket> buckets = new LinkedHashMap<>();
 
         for (ModelCube cube : group.cubes)
         {
-            this.renderCube(buckets.computeIfAbsent("", (k) -> new MaterialBucket()), stack, group, cube);
+            String material = cube.material == null ? "" : cube.material;
+
+            this.renderCube(buckets.computeIfAbsent(material, (k) -> new MaterialBucket()), stack, group, cube);
         }
 
         for (ModelMesh mesh : group.meshes)
@@ -116,17 +128,22 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
 
         for (ModelQuad quad : cube.quads)
         {
-            this.normal.set(quad.normal.x, quad.normal.y, quad.normal.z);
-            stack.peek().getNormalMatrix().transform(this.normal);
+            int count = quad.vertices.size();
 
-            if (quad.vertices.size() == 4)
+            if (count != 3 && count != 4)
             {
-                this.writeVertex(bucket, stack, group, quad.vertices.get(0), this.normal);
-                this.writeVertex(bucket, stack, group, quad.vertices.get(1), this.normal);
-                this.writeVertex(bucket, stack, group, quad.vertices.get(2), this.normal);
-                this.writeVertex(bucket, stack, group, quad.vertices.get(0), this.normal);
-                this.writeVertex(bucket, stack, group, quad.vertices.get(2), this.normal);
-                this.writeVertex(bucket, stack, group, quad.vertices.get(3), this.normal);
+                continue;
+            }
+
+            this.writeVertex(bucket, stack, group, quad.vertices.get(0));
+            this.writeVertex(bucket, stack, group, quad.vertices.get(1));
+            this.writeVertex(bucket, stack, group, quad.vertices.get(2));
+
+            if (count == 4)
+            {
+                this.writeVertex(bucket, stack, group, quad.vertices.get(0));
+                this.writeVertex(bucket, stack, group, quad.vertices.get(2));
+                this.writeVertex(bucket, stack, group, quad.vertices.get(3));
             }
         }
 
@@ -174,6 +191,15 @@ public class CubicVAOBuilderRenderer implements ICubicRenderer
         }
 
         stack.pop();
+    }
+
+    /** Write a cube vertex with its own normal, transformed per vertex. */
+    private void writeVertex(MaterialBucket bucket, MatrixStack stack, ModelGroup group, ModelVertex vertex)
+    {
+        this.normal.set(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+        stack.peek().getNormalMatrix().transform(this.normal);
+
+        this.writeVertex(bucket, stack, group, vertex, this.normal);
     }
 
     private void writeVertex(MaterialBucket bucket, MatrixStack stack, ModelGroup group, ModelVertex vertex, Vector3f normal)

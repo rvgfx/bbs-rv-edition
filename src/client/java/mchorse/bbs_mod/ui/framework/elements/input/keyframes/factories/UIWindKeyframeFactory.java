@@ -3,6 +3,8 @@ package mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories;
 import mchorse.bbs_mod.cubic.physics.WindControl;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.film.replays.UIReplaysEditorUtils;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
@@ -19,13 +21,14 @@ import java.util.function.Consumer;
  */
 public class UIWindKeyframeFactory extends UIKeyframeFactory<WindControl>
 {
-    public UITrackpad strength;
+    public UISliderTrackpad strength;
     public UITrackpad x;
     public UITrackpad y;
     public UITrackpad z;
-    public UITrackpad turbulence;
-    public UITrackpad turbulenceSpeed;
-    public UITrackpad turbulenceScale;
+    public UISliderTrackpad turbulence;
+    public UISliderTrackpad turbulenceSpeed;
+    public UISliderTrackpad turbulenceScale;
+    public UIToggle local;
 
     private boolean syncing;
 
@@ -33,26 +36,30 @@ public class UIWindKeyframeFactory extends UIKeyframeFactory<WindControl>
     {
         super(keyframe, editor);
 
-        this.strength = new UITrackpad((v) -> this.edit((control) -> control.strength = v.floatValue()));
+        this.strength = new UISliderTrackpad((v) -> this.edit((control) -> control.strength = v.floatValue()));
         this.strength.limit(0D, 10D).increment(0.25D).values(0.1D, 0.01D, 0.5D);
 
         this.x = this.axis((v) -> this.edit((control) -> control.x = v.floatValue()), Colors.RED);
         this.y = this.axis((v) -> this.edit((control) -> control.y = v.floatValue()), Colors.GREEN);
         this.z = this.axis((v) -> this.edit((control) -> control.z = v.floatValue()), Colors.BLUE);
 
-        this.turbulence = new UITrackpad((v) -> this.edit((control) -> control.turbulence = v.floatValue()));
+        this.turbulence = new UISliderTrackpad((v) -> this.edit((control) -> control.turbulence = v.floatValue()));
         this.turbulence.limit(0D, 1D).increment(0.05D).values(0.05D, 0.01D, 0.2D);
 
-        this.turbulenceSpeed = new UITrackpad((v) -> this.edit((control) -> control.turbulenceSpeed = v.floatValue()));
+        this.turbulenceSpeed = new UISliderTrackpad((v) -> this.edit((control) -> control.turbulenceSpeed = v.floatValue()));
         this.turbulenceSpeed.limit(0D, 10D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
 
-        this.turbulenceScale = new UITrackpad((v) -> this.edit((control) -> control.turbulenceScale = v.floatValue()));
+        this.turbulenceScale = new UISliderTrackpad((v) -> this.edit((control) -> control.turbulenceScale = v.floatValue()));
         this.turbulenceScale.limit(0D, 10D).increment(0.1D).values(0.1D, 0.05D, 0.5D);
+
+        this.local = new UIToggle(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL, (b) -> this.edit((control) -> control.local = b.getValue()));
+        this.local.tooltip(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_LOCAL_TOOLTIP);
 
         this.scroll.add(UI.column(
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_STRENGTH, this.strength).marginTop(UIConstants.SECTION_GAP),
             UI.label(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_DIRECTION).marginTop(UIConstants.SECTION_GAP),
             UI.row(this.x, this.y, this.z),
+            this.local.marginTop(UIConstants.SECTION_GAP),
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE, this.turbulence).marginTop(UIConstants.SECTION_GAP),
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SPEED, this.turbulenceSpeed).marginTop(UIConstants.SECTION_GAP),
             UI.labelRow(UIKeys.FORMS_EDITORS_MODEL_PHYSICS_WIND_TURBULENCE_SCALE, this.turbulenceScale).marginTop(UIConstants.SECTION_GAP)
@@ -81,6 +88,7 @@ public class UIWindKeyframeFactory extends UIKeyframeFactory<WindControl>
             this.turbulence.setValue(control.turbulence);
             this.turbulenceSpeed.setValue(control.turbulenceSpeed);
             this.turbulenceScale.setValue(control.turbulenceScale);
+            this.local.setValue(control.local);
         }
         finally
         {

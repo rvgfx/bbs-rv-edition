@@ -4,13 +4,12 @@ import mchorse.bbs_mod.l10n.L10n;
 import mchorse.bbs_mod.settings.values.ui.ValueDebugElement;
 import mchorse.bbs_mod.settings.values.ui.ValueModelDebug;
 import mchorse.bbs_mod.ui.UIKeys;
-import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.context.UIContextMenu;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
@@ -32,7 +31,7 @@ public class UIDebugOverlayContextMenu extends UIContextMenu
     public UIIcon enable;
     public UIIcon xray;
     public UIIcon dashed;
-    public UITrackpad opacity;
+    public UISliderTrackpad opacity;
 
     private ValueModelDebug config;
     private UIElement column;
@@ -44,11 +43,13 @@ public class UIDebugOverlayContextMenu extends UIContextMenu
         this.enable = new UIIcon(() -> this.config.enabled.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> this.config.enabled.toggle());
         this.enable.tooltip(UIKeys.MODEL_DEBUG_ENABLED);
         this.xray = new UIIcon(Icons.FADING, (b) -> this.config.xray.toggle());
+        this.xray.highlight(this.config.xray::get, Direction.BOTTOM);
         this.xray.tooltip(UIKeys.MODEL_DEBUG_XRAY);
         this.dashed = new UIIcon(Icons.LINE, (b) -> this.config.dashed.toggle());
+        this.dashed.highlight(this.config.dashed::get, Direction.BOTTOM);
         this.dashed.tooltip(UIKeys.MODEL_DEBUG_DASHED);
 
-        this.opacity = new UITrackpad((v) -> this.config.opacity.set(v.floatValue()));
+        this.opacity = new UISliderTrackpad((v) -> this.config.opacity.set(v.floatValue()));
         this.opacity.limit(this.config.opacity).setValue(this.config.opacity.get());
 
         List<UIElement> rows = new ArrayList<>();
@@ -75,7 +76,7 @@ public class UIDebugOverlayContextMenu extends UIContextMenu
     {
         UIIcon visible = new UIIcon(() -> element.visible.get() ? Icons.VISIBLE : Icons.INVISIBLE, (b) -> element.visible.toggle());
         UIColor color = new UIColor((c) -> element.color.set(c));
-        UITrackpad size = new UITrackpad((v) -> element.size.set(v.floatValue()));
+        UISliderTrackpad size = new UISliderTrackpad((v) -> element.size.set(v.floatValue()));
 
         color.setColor(element.color.get());
         size.limit(element.size).setValue(element.size.get());
@@ -126,21 +127,5 @@ public class UIDebugOverlayContextMenu extends UIContextMenu
         this.xy(context.mouseX(), context.mouseY())
             .wh(this.column.area.w, this.column.area.h)
             .bounds(context.menu.overlay, 5);
-    }
-
-    @Override
-    protected void renderBackground(UIContext context)
-    {
-        super.renderBackground(context);
-
-        if (this.config.xray.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.xray.area, Direction.BOTTOM);
-        }
-
-        if (this.config.dashed.get())
-        {
-            UIDashboardPanels.renderHighlight(context.batcher, this.dashed.area, Direction.BOTTOM);
-        }
     }
 }

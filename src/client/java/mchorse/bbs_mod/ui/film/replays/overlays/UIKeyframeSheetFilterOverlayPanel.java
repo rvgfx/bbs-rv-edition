@@ -1,5 +1,6 @@
 package mchorse.bbs_mod.ui.film.replays.overlays;
 
+import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -9,11 +10,10 @@ import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIButton;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlayPanel;
+import mchorse.bbs_mod.ui.framework.elements.utils.RowStyle;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.UIConstants;
 import mchorse.bbs_mod.ui.utils.icons.Icon;
-import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,14 +66,21 @@ public class UIKeyframeSheetFilterOverlayPanel extends UIOverlayPanel
 
         UIScrollView scrollView = UI.scrollView(4, 6);
 
+        /* Where the toggles start: under the button, which sits 6 from the top */
+        int top = 6 + UIConstants.CONTROL_HEIGHT + 4;
+
         toggleAll.relative(this.content).x(6).y(6).w(1F, -12).h(UIConstants.CONTROL_HEIGHT);
-        scrollView.relative(this.content).x(0).y(6 + UIConstants.CONTROL_HEIGHT + 4).w(1F).h(1F, -(6 + UIConstants.CONTROL_HEIGHT + 4));
+        scrollView.relative(this.content).x(0).y(top).w(1F).hTo(this.content.area, 1F);
         this.content.add(toggleAll, scrollView);
 
         for (String key : keys)
         {
-            int color = keyToColor != null && keyToColor.containsKey(key) ? keyToColor.get(key) : UIReplaysEditor.getColor(key);
-            UIToggle toggle = new UICoolToggle(key, IKey.constant(key), color, (b) ->
+            int color = keyToColor != null && keyToColor.containsKey(key)
+                ? keyToColor.get(key)
+                : BBSSettings.trackStyles.color(key, UIReplaysEditor.getColor(key));
+            /* Show the user's name for the track, so a renamed row is recognizable here too */
+            String label = BBSSettings.trackStyles.name(key, key);
+            UIToggle toggle = new UICoolToggle(key, IKey.constant(label), color, (b) ->
             {
                 if (disabled.contains(key))
                 {
@@ -123,8 +130,7 @@ public class UIKeyframeSheetFilterOverlayPanel extends UIOverlayPanel
             int h = this.area.h;
             Icon icon = UIReplaysEditor.getIcon(this.key);
 
-            context.batcher.box(x, y, x + 2, y + h, Colors.A100 | color);
-            context.batcher.gradientHBox(x + 2, y, x + 24, y + h, Colors.A25 | color, color);
+            RowStyle.swatch(context.batcher, x, y, h, color);
             context.batcher.icon(icon, x + 2, y + h / 2, 0F, 0.5F);
 
             this.area.x += 20;

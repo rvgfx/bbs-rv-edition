@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.ItemForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
@@ -16,6 +17,7 @@ import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 public class ItemFormRenderer extends FormRenderer<ItemForm>
 {
@@ -42,7 +44,7 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
         matrices.peek().getNormalMatrix().scale(1F / Vectors.EMPTY_3F.x, -1F / Vectors.EMPTY_3F.y, 1F / Vectors.EMPTY_3F.z);
 
         Color set = Color.white();
-        FormColorBlend.blend(set, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(set, this.form.color.get());
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(set));
         consumers.setUI(true);
@@ -78,12 +80,22 @@ public class ItemFormRenderer extends FormRenderer<ItemForm>
         }
 
         BlockFormRenderer.color.set(context.color);
-        FormColorBlend.blend(BlockFormRenderer.color, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(BlockFormRenderer.color, this.form.color.get());
+
+        /* Publishing the form's camera-space origin opts its translucent layers into the
+         * deferred sorted pass (see CustomVertexConsumerProvider#draw(RenderLayer)). */
+        if (!context.isPicking())
+        {
+            Vector3f origin = context.stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+
+            FormTranslucentQueue.setSortOrigin(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin));
+        }
 
         consumers.setSubstitute(BBSRendering.getColorConsumer(BlockFormRenderer.color));
         MinecraftClient.getInstance().getItemRenderer().renderItem(this.form.stack.get(), this.form.modelTransform.get(), light, context.overlay, context.stack, consumers, context.entity.getWorld(), 0);
         consumers.draw();
         consumers.setSubstitute(null);
+        FormTranslucentQueue.setSortOrigin(null);
 
         CustomVertexConsumerProvider.clearRunnables();
 

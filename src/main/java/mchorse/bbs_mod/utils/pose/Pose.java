@@ -105,12 +105,8 @@ public class Pose implements IMapSerializable
             this.transforms.put(pair.a, r);
             this.transforms.put(pair.b, l);
 
-            r.translate.mul(-1F, 1F, 1F);
-            r.rotate.mul(1F, -1F, -1F);
-            r.rotate2.mul(1F, -1F, -1F);
-            l.translate.mul(-1F, 1F, 1F);
-            l.rotate.mul(1F, -1F, -1F);
-            l.rotate2.mul(1F, -1F, -1F);
+            r.mirrorX();
+            l.mirrorX();
 
             bones.remove(pair.a);
             bones.remove(pair.b);
@@ -118,11 +114,7 @@ public class Pose implements IMapSerializable
 
         for (String bone : bones)
         {
-            PoseTransform poseTransform = this.transforms.get(bone);
-
-            poseTransform.translate.mul(-1F, 1F, 1F);
-            poseTransform.rotate.mul(1F, -1F, -1F);
-            poseTransform.rotate2.mul(1F, -1F, -1F);
+            this.transforms.get(bone).mirrorX();
         }
     }
 
@@ -151,7 +143,21 @@ public class Pose implements IMapSerializable
         return name;
     }
 
+    /**
+     * The bone's transform, or {@code null} when this pose says nothing about it.
+     *
+     * <p>Reading does NOT insert: a pose holds exactly the bones somebody posed, and
+     * "this pose is silent about that bone" is a real answer that callers act on —
+     * interpolation substitutes the rest transform, a bone track adds onto it. Reading
+     * used to create, so every reader quietly grew the pose it was only looking at.
+     */
     public PoseTransform get(String name)
+    {
+        return this.transforms.get(name);
+    }
+
+    /** The bone's transform, inserting a rest one when the pose has none — for writers. */
+    public PoseTransform getOrCreate(String name)
     {
         PoseTransform transform = this.transforms.get(name);
 

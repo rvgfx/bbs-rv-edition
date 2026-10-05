@@ -1,35 +1,75 @@
 package mchorse.bbs_mod;
 
+import mchorse.bbs_mod.api.client.editor.TrackCategories;
+import mchorse.bbs_mod.api.client.events.RegisterTrackCategoriesEvent;
+
+import mchorse.bbs_mod.api.client.events.RegisterFilmToolsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormPanelsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterReplayActionsEvent;
+
 import com.mojang.blaze3d.systems.RenderSystem;
-import mchorse.bbs_mod.actions.ActionState;
+import mchorse.bbs_mod.audio.MinecraftSoundCapture;
 import mchorse.bbs_mod.audio.SoundManager;
+import mchorse.bbs_mod.blocks.ModelBlock;
 import mchorse.bbs_mod.blocks.entities.ModelProperties;
 import mchorse.bbs_mod.blocks.entities.TriggerBlockEntity;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.misc.AudioClientClip;
 import mchorse.bbs_mod.camera.clips.misc.CurveClientClip;
 import mchorse.bbs_mod.camera.clips.misc.TrackerClientClip;
+import mchorse.bbs_mod.camera.clips.misc.VideoClientClip;
+import mchorse.bbs_mod.fonts.FontManager;
+import mchorse.bbs_mod.video.VideoManager;
 import mchorse.bbs_mod.camera.controller.CameraController;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.client.renderer.LivePlayerItemUse;
 import mchorse.bbs_mod.client.renderer.ModelBlockEntityRenderer;
 import mchorse.bbs_mod.client.renderer.TriggerBlockEntityRenderer;
+import mchorse.bbs_mod.client.renderer.ThirdPersonItemUse;
+import mchorse.bbs_mod.cubic.animation.ItemUsePose;
 import mchorse.bbs_mod.client.renderer.entity.ActorEntityRenderer;
 import mchorse.bbs_mod.client.renderer.entity.GunProjectileEntityRenderer;
 import mchorse.bbs_mod.client.renderer.item.GunItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.ModelBlockItemRenderer;
 import mchorse.bbs_mod.client.renderer.item.PlaybackItemRenderer;
 import mchorse.bbs_mod.cubic.model.ModelManager;
-import mchorse.bbs_mod.events.register.RegisterClientSettingsEvent;
-import mchorse.bbs_mod.events.register.RegisterL10nEvent;
-import mchorse.bbs_mod.film.Film;
-import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.api.BBSAddonMod;
+import mchorse.bbs_mod.api.client.events.BBSClientReadyEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClientSettingsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipPanelsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterClipRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormSectionsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFrameOverlaysEvent;
+import mchorse.bbs_mod.ui.film.FrameOverlays;
+import mchorse.bbs_mod.api.client.events.RegisterImportersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeybindsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterModelLoadersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterPreviewOverlaysEvent;
+import mchorse.bbs_mod.api.client.events.RegisterTrackStylesEvent;
+import mchorse.bbs_mod.film.replays.tracks.TrackStyle;
+import mchorse.bbs_mod.importers.Importers;
+import mchorse.bbs_mod.ui.film.clips.renderer.UIClipRenderers;
+import mchorse.bbs_mod.api.client.events.RegisterFormEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterFormRenderersEvent;
+import mchorse.bbs_mod.api.client.events.RegisterKeyframeEditorsEvent;
+import mchorse.bbs_mod.api.client.events.RegisterValueWidgetsEvent;
+import mchorse.bbs_mod.forms.FormUtilsClient;
+import mchorse.bbs_mod.particles.vanilla.VanillaParticlePreview;
+import mchorse.bbs_mod.settings.ui.UIValueMap;
+import mchorse.bbs_mod.ui.film.clips.UIClip;
+import mchorse.bbs_mod.ui.forms.editors.UIFormEditor;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.UIKeyframeFactory;
+import mchorse.bbs_mod.api.client.events.RegisterL10nEvent;
 import mchorse.bbs_mod.film.Films;
 import mchorse.bbs_mod.film.Recorder;
+import mchorse.bbs_mod.film.WorldVideoExportSession;
 import mchorse.bbs_mod.film.replays.Replay;
 import mchorse.bbs_mod.forms.FormCategories;
 import mchorse.bbs_mod.forms.categories.UserFormCategory;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.structure.BakedStructure;
+import mchorse.bbs_mod.forms.structure.StructureSelection;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.graphics.FramebufferManager;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
@@ -49,7 +89,9 @@ import mchorse.bbs_mod.resources.packs.URLSourcePack;
 import mchorse.bbs_mod.resources.packs.URLTextureErrorCallback;
 import mchorse.bbs_mod.selectors.EntitySelectors;
 import mchorse.bbs_mod.ui.UIKeys;
+import mchorse.bbs_mod.ui.dashboard.DashboardWarmup;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.dashboard.panels.UIDashboardPanels;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
@@ -61,10 +103,18 @@ import mchorse.bbs_mod.ui.utils.keys.KeybindSettings;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.ScreenshotRecorder;
 import mchorse.bbs_mod.utils.VideoRecorder;
-import mchorse.bbs_mod.utils.WorldExportWindowSession;
 import mchorse.bbs_mod.utils.colors.Color;
 import mchorse.bbs_mod.utils.colors.Colors;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+import net.minecraft.util.Identifier;
+import net.minecraft.resource.ResourceManager;
+import net.minecraft.resource.ResourceType;
+import mchorse.bbs_mod.cubic.jem.VanillaRigs;
+import mchorse.bbs_mod.utils.resources.CemSourcePack;
 import mchorse.bbs_mod.utils.resources.MinecraftSourcePack;
+import mchorse.bbs_mod.utils.resources.PlayerSkinSourcePack;
+import mchorse.bbs_mod.utils.resources.PlayerSkins;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -77,6 +127,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.InvalidateRenderStateCallback
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.impl.client.rendering.BlockEntityRendererRegistryImpl;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
@@ -105,12 +156,15 @@ public class BBSModClient implements ClientModInitializer
     private static TextureManager textures;
     private static FramebufferManager framebuffers;
     private static SoundManager sounds;
+    private static VideoManager videos;
+    private static FontManager fonts;
     private static L10n l10n;
 
     private static ModelManager models;
     private static FormCategories formCategories;
     private static ScreenshotRecorder screenshotRecorder;
     private static VideoRecorder videoRecorder;
+    private static final MinecraftSoundCapture minecraftSoundCapture = new MinecraftSoundCapture();
     private static EntitySelectors selectors;
 
     private static ParticleManager particles;
@@ -136,34 +190,44 @@ public class BBSModClient implements ClientModInitializer
     private static PlaybackItemRenderer playbackItemRenderer = new PlaybackItemRenderer();
     private static Films films;
     private static GunZoom gunZoom;
-    private static String playFilmAndRecordFilmId;
 
-    private static PendingVideoExportState pendingVideoExportState = PendingVideoExportState.NONE;
-    private static long pendingVideoExportStartAtMs;
-    private static int pendingVideoExportWidth;
-    private static int pendingVideoExportHeight;
-    private static final WorldExportWindowSession worldExportWindowSession = new WorldExportWindowSession();
+    private static final WorldVideoExportSession worldExportSession = new WorldVideoExportSession();
 
     private static float originalFramebufferScale;
+    private static boolean customGUIScale;
 
-    private enum PendingVideoExportState
+    /** The OptiFine CEM models of the installed resource packs; null until the client has started. */
+    private static CemSourcePack cemSourcePack;
+
+    /** Minecraft's own textures; null until the client has started. */
+    private static MinecraftSourcePack minecraftSourcePack;
+
+    public static CemSourcePack getCemSourcePack()
     {
-        NONE,
-        VIDEO_DELAY,
-        FILM_WAIT_FIRST_TICK,
-        FILM_DELAY_PAUSED
+        return cemSourcePack;
     }
 
-    private static class VideoSize
+    /**
+     * Read the resource packs again and drop everything built on what they said before. A pack going
+     * on or off changes which models and textures exist, and nothing else would notice: the watchdog
+     * watches BBS's own folder, and a link a pack serves has no file behind it to watch.
+     */
+    private static void reloadFromResourcePacks()
     {
-        private final int width;
-        private final int height;
+        VanillaParticlePreview.clearCache();
 
-        private VideoSize(int width, int height)
+        /* The first reload runs before the client has started; both packs index themselves when made. */
+        if (cemSourcePack == null)
         {
-            this.width = width;
-            this.height = height;
+            return;
         }
+
+        minecraftSourcePack.setupPaths();
+        cemSourcePack.reindex();
+        VanillaRigs.clear();
+
+        getModels().forgetFolder(CemSourcePack.NAME + "/");
+        getFormCategories().setup();
     }
 
     public static TextureManager getTextures()
@@ -179,6 +243,16 @@ public class BBSModClient implements ClientModInitializer
     public static SoundManager getSounds()
     {
         return sounds;
+    }
+
+    public static VideoManager getVideos()
+    {
+        return videos;
+    }
+
+    public static FontManager getFonts()
+    {
+        return fonts;
     }
 
     public static L10n getL10n()
@@ -204,6 +278,11 @@ public class BBSModClient implements ClientModInitializer
     public static VideoRecorder getVideoRecorder()
     {
         return videoRecorder;
+    }
+
+    public static MinecraftSoundCapture getMinecraftSoundCapture()
+    {
+        return minecraftSoundCapture;
     }
 
     public static EntitySelectors getSelectors()
@@ -243,26 +322,41 @@ public class BBSModClient implements ClientModInitializer
 
     public static boolean isVideoExportDelayPending()
     {
-        return pendingVideoExportState != PendingVideoExportState.NONE;
+        return worldExportSession.isWarmingUp();
     }
 
     public static long getVideoExportDelayRemainingMs()
     {
-        if (!isVideoExportDelayPending())
-        {
-            return 0L;
-        }
-
-        return Math.max(0L, pendingVideoExportStartAtMs - System.currentTimeMillis());
+        return worldExportSession.getWarmupRemainingMs();
     }
 
     /** Returns the dashboard without creating it. Used to avoid creating UI when handling keys (e.g. F6) before user has opened BBS. */
     public static UIDashboard getDashboardIfCreated()
     {
+        if (dashboard != null)
+        {
+            dashboard.finishBuilding();
+        }
+
         return dashboard;
     }
 
     public static UIDashboard getDashboard()
+    {
+        UIDashboard dashboard = getUnfinishedDashboard();
+
+        dashboard.finishBuilding();
+
+        return dashboard;
+    }
+
+    /**
+     * The dashboard, created if it wasn't there, but not necessarily built in full.
+     *
+     * <p>Only {@link DashboardWarmup}, which is what finishes it a step at a time, has any
+     * business with a half built dashboard — everybody else wants {@link #getDashboard()}.</p>
+     */
+    public static UIDashboard getUnfinishedDashboard()
     {
         if (dashboard == null)
         {
@@ -272,16 +366,32 @@ public class BBSModClient implements ClientModInitializer
         return dashboard;
     }
 
-    public static int getGUIScale()
+    /**
+     * Whether BBS's UI is on screen right now, i.e. whether the ui_scale setting
+     * should drive the window's scale factor (see WindowMixin).
+     */
+    public static void setCustomGUIScale(boolean enabled)
     {
-        int scale = BBSSettings.userIntefaceScale.get();
+        customGUIScale = enabled;
+    }
 
-        if (scale == 0)
-        {
-            return MinecraftClient.getInstance().options.getGuiScale().getValue();
-        }
+    /**
+     * GUI scale that should be forced upon the window, or 0 to leave
+     * Minecraft's own scale in charge (BBS UI closed, or ui_scale is 0).
+     */
+    public static float getCustomGUIScale()
+    {
+        return customGUIScale ? BBSSettings.userIntefaceScale.get() : 0F;
+    }
 
-        return scale;
+    /**
+     * The scale at which GUI is being rendered right now (GUI pixels to
+     * framebuffer pixels). Unlike the ui_scale setting itself, this is always
+     * the actual applied value, including the "0 = Minecraft's scale" mode.
+     */
+    public static float getGUIScale()
+    {
+        return (float) MinecraftClient.getInstance().getWindow().getScaleFactor();
     }
 
     public static float getOriginalFramebufferScale()
@@ -379,6 +489,32 @@ public class BBSModClient implements ClientModInitializer
     @Override
     public void onInitializeClient()
     {
+        /* Every resource reload: the pack list changed, or the user pressed F3+T. It fires before the
+         * client has started too, which reloadFromResourcePacks sits out. */
+        ResourceManagerHelper.get(ResourceType.CLIENT_RESOURCES).registerReloadListener(new SimpleSynchronousResourceReloadListener()
+        {
+            @Override
+            public Identifier getFabricId()
+            {
+                return new Identifier(BBSMod.MOD_ID, "resource_pack_models");
+            }
+
+            @Override
+            public void reload(ResourceManager manager)
+            {
+                reloadFromResourcePacks();
+            }
+        });
+
+        /* The client half of the addons, picked up before anything client side is posted. Their
+         * common half is registered by BBSMod, from the "bbs-addon" entrypoint. */
+        FabricLoader.getInstance()
+            .getEntrypointContainers("bbs-client-addon", BBSAddonMod.class)
+            .forEach((container) ->
+            {
+                BBSMod.events.register(container.getEntrypoint());
+            });
+
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) ->
         {
             if (world.getBlockEntity(pos) instanceof TriggerBlockEntity)
@@ -401,15 +537,26 @@ public class BBSModClient implements ClientModInitializer
         textures = new TextureManager(provider);
         framebuffers = new FramebufferManager();
         sounds = new SoundManager(provider);
+        videos = new VideoManager();
+        fonts = new FontManager();
         l10n = new L10n();
         l10n.register((lang) -> Collections.singletonList(Link.assets("strings/" + lang + ".json")));
-        l10n.reload();
 
+        /* Addons add their own language files here, so the event goes out before the load and not
+         * after it — otherwise every addon label would show its raw key until the next language
+         * switch, or every addon would have to reload the whole thing a second time. */
         BBSMod.events.post(new RegisterL10nEvent(l10n));
+
+        l10n.reload();
 
         File parentFile = BBSMod.getSettingsFolder().getParentFile();
 
         particles = new ParticleManager(() -> new File(BBSMod.getAssetsFolder(), "particles"));
+
+        /* Both of these are read by the objects made right below, and both lists are rebuilt
+         * on every asset reload — so the moment to add to them is before the first build. */
+        BBSMod.events.post(new RegisterModelLoadersEvent());
+        BBSMod.events.post(new RegisterFormSectionsEvent());
 
         models = new ModelManager(provider);
         formCategories = new FormCategories();
@@ -421,18 +568,50 @@ public class BBSModClient implements ClientModInitializer
 
         BBSResources.init();
 
+        /* While the dashboard is open or a model block is held, model blocks
+         * are targetable as at least a full cube even with a tiny hitbox. */
+        ModelBlock.editingCheck = () ->
+        {
+            if (UIScreen.getCurrentMenu() instanceof UIDashboard)
+            {
+                return true;
+            }
+
+            MinecraftClient mc = MinecraftClient.getInstance();
+
+            return mc.player != null && mc.player.getMainHandStack().isOf(BBSMod.MODEL_BLOCK_ITEM);
+        };
+
         URLRepository repository = new URLRepository(new File(parentFile, "url_cache"));
 
         provider.register(new URLSourcePack("http", repository));
         provider.register(new URLSourcePack("https", repository));
 
+        PlayerSkins.init(new File(parentFile, "skin_cache"));
+
+        provider.register(new PlayerSkinSourcePack());
+
+        BBSMod.events.post(new RegisterTrackCategoriesEvent());
+        TrackCategories.finishRegistration();
+
         KeybindSettings.registerClasses();
+
+        BBSMod.events.post(new RegisterKeybindsEvent());
 
         BBSMod.setupConfig(Icons.KEY_CAP, "keybinds", new File(BBSMod.getSettingsFolder(), "keybinds.json"), KeybindSettings::register);
 
         BBSMod.events.post(new RegisterClientSettingsEvent());
 
         BBSSettings.language.postCallback((v, f) -> reloadLanguage(getLanguageKey()));
+        BBSSettings.userIntefaceScale.postCallback((v, f) ->
+        {
+            MinecraftClient mc = MinecraftClient.getInstance();
+
+            if (mc.currentScreen instanceof UIScreen)
+            {
+                mc.onResolutionChanged();
+            }
+        });
         BBSSettings.editorSeconds.postCallback((v, f) ->
         {
             if (dashboard != null && dashboard.getPanels().panel instanceof UIFilmPanel panel)
@@ -441,17 +620,22 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
-        BBSSettings.theme.modes(
-            UIKeys.ENGINE_THEME_LIGHT,
-            UIKeys.ENGINE_THEME_DARK
-        );
+        BBSSettings.taskbarSide.postCallback((v, f) ->
+        {
+            if (dashboard != null)
+            {
+                dashboard.getPanels().setSide(UIDashboardPanels.getSettingsSide());
+            }
+        });
+
+        BBSSettings.taskbarSide.modes(UIDashboardPanels.getSideLabels());
 
         BBSSettings.keystrokeMode.modes(
-                UIKeys.ENGINE_KEYSTROKES_POSITION_AUTO,
-                UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_LEFT,
-                UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_RIGHT,
-                UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_RIGHT,
-                UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_LEFT
+            UIKeys.ENGINE_KEYSTROKES_POSITION_AUTO,
+            UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_LEFT,
+            UIKeys.ENGINE_KEYSTROKES_POSITION_BOTTOM_RIGHT,
+            UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_RIGHT,
+            UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_LEFT
         );
 
         BBSSettings.rotate3dSphereMode.modes(
@@ -470,11 +654,12 @@ public class BBSModClient implements ClientModInitializer
 
         BBSSettings.scaleHotkeyOrder
             .labels(
+                UIKeys.TRANSFORMS_TARGET_ALL,
                 IKey.constant("X"),
                 IKey.constant("Y"),
                 IKey.constant("Z")
             )
-            .colors(Colors.A100 | Colors.RED, Colors.A100 | Colors.GREEN, Colors.A100 | Colors.BLUE);
+            .colors(0, Colors.A100 | Colors.RED, Colors.A100 | Colors.GREEN, Colors.A100 | Colors.BLUE);
 
         BBSSettings.rotateHotkeyOrder
             .labels(
@@ -492,8 +677,44 @@ public class BBSModClient implements ClientModInitializer
         /* Replace audio clip with client version that plays audio */
         BBSMod.getFactoryCameraClips()
             .register(Link.bbs("audio"), AudioClientClip.class, new ClipFactoryData(Icons.SOUND, 0xffc825))
+            .register(Link.bbs("video"), VideoClientClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xd21f3c))
             .register(Link.bbs("tracker"), TrackerClientClip.class, new ClipFactoryData(Icons.USER, 0x4cedfc))
             .register(Link.bbs("curve"), CurveClientClip.class, new ClipFactoryData(Icons.ARC, 0xff1493));
+
+        /* The client-side registries, each followed by the event that lets addons add to it.
+         * They used to fill themselves in static initialisers, so the moment depended on who
+         * touched the class first — a moment nobody chose and an addon could not aim at. */
+        FormUtilsClient.setup();
+        BBSMod.events.post(new RegisterFormRenderersEvent());
+
+        UIFormEditor.setup();
+        BBSMod.events.post(new RegisterFormEditorsEvent());
+        BBSMod.events.post(new RegisterFormPanelsEvent());
+        BBSMod.events.post(new RegisterReplayActionsEvent());
+
+        UIClip.setup();
+        BBSMod.events.post(new RegisterClipPanelsEvent());
+
+        UIKeyframeFactory.setup();
+        BBSMod.events.post(new RegisterKeyframeEditorsEvent());
+
+        UIValueMap.setup();
+        BBSMod.events.post(new RegisterValueWidgetsEvent());
+
+        UIClipRenderers.setup();
+        BBSMod.events.post(new RegisterClipRenderersEvent());
+
+        TrackStyle.setup();
+        BBSMod.events.post(new RegisterTrackStylesEvent());
+
+        Importers.setup();
+        BBSMod.events.post(new RegisterImportersEvent());
+
+        FrameOverlays.setup();
+        BBSMod.events.post(new RegisterFrameOverlaysEvent());
+
+        BBSMod.events.post(new RegisterPreviewOverlaysEvent());
+        BBSMod.events.post(new RegisterFilmToolsEvent());
 
         /* Keybinds */
         keyDashboard = this.createKey("dashboard", GLFW.GLFW_KEY_0);
@@ -509,12 +730,20 @@ public class BBSModClient implements ClientModInitializer
         keyTeleport = this.createKey("teleport", GLFW.GLFW_KEY_Y);
         keyZoom = this.createKeyMouse("zoom", 2);
 
+        StructureWand.register();
+
+        WorldRenderEvents.BEFORE_ENTITIES.register((context) -> BBSRendering.beginEntityPass());
+
         WorldRenderEvents.AFTER_ENTITIES.register((context) ->
         {
+            StructureWand.renderWorld(context);
+
             if (!BBSRendering.isIrisShadersEnabled())
             {
                 BBSRendering.renderCoolStuff(context);
             }
+
+            BBSRendering.endEntityPass();
 
             if (BBSSettings.chromaSkyEnabled.get())
             {
@@ -560,10 +789,16 @@ public class BBSModClient implements ClientModInitializer
             }
         });
 
+        /* The procedural animator poses actor arms from the film's use state
+         * (a drawn bow, a raised shield), and that state is computed here on
+         * the client - hand it the lookup. */
+        ItemUsePose.setSource(ThirdPersonItemUse::get);
+
         WorldRenderEvents.LAST.register((context) ->
         {
             if (videoRecorder.isRecording() && BBSRendering.canRender)
             {
+                minecraftSoundCapture.captureFrame();
                 videoRecorder.recordFrame();
             }
         });
@@ -571,11 +806,19 @@ public class BBSModClient implements ClientModInitializer
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
         {
             dashboard = null;
-            films.reset();
-            cameraController.reset();
+            DashboardWarmup.reset();
+            worldExportSession.stop();
+            videos.delete();
+
+            /* Corners are raw coordinates: kept across a world change they would point the wand
+             * at whatever now stands in their place */
+            StructureSelection.clear();
+
+            /* A panel export dies with its dashboard without finishing - the sound
+             * capture must not keep accumulating into the next session */
+            minecraftSoundCapture.end();
+
             films = new Films();
-            this.stopVideoRecording();
-            playFilmAndRecordFilmId = null;
 
             ClientNetwork.resetHandshake();
             films.reset();
@@ -584,7 +827,17 @@ public class BBSModClient implements ClientModInitializer
 
         ClientTickEvents.START_CLIENT_TICK.register((client) ->
         {
+            /* The frame is over: outside of drawing, the player is themselves
+             * again and nothing of the film's use answers for them */
+            LivePlayerItemUse.endFrame();
+
+            videos.update();
+            sounds.update();
+            fonts.update();
+
             BBSRendering.startTick();
+
+            getFormCategories().getUserForms().flush();
             BBSRendering.capturedTriggerBlocks.clear();
         });
 
@@ -617,22 +870,21 @@ public class BBSModClient implements ClientModInitializer
                 modelBlockItemRenderer.update();
                 gunItemRenderer.update();
                 playbackItemRenderer.update();
+            }
+
+            /* Animated textures keep going in BBS's own screens even while the game is paused
+             * under them — the texture manager pauses it, the film editor doesn't, and a preview
+             * should play in both. With no BBS screen the clock stops with the world, as vanilla's does. */
+            if (!mc.isPaused() || mc.currentScreen instanceof UIScreen)
+            {
                 textures.update();
             }
 
-            if (playFilmAndRecordFilmId != null && this.hasPendingPlayFilmAndRecord() && !films.has(playFilmAndRecordFilmId))
-            {
-                this.stopVideoRecording();
-                this.clearPlayFilmAndRecordSessionState();
-            }
+            worldExportSession.update();
 
-            this.updatePendingVideoRecording();
-
-            if (playFilmAndRecordFilmId != null && !videoRecorder.isRecording() && !this.hasPendingPlayFilmAndRecord())
-            {
-                this.restoreWorldExportWindowSize();
-                this.clearPlayFilmAndRecordSessionState();
-            }
+            /* Build the dashboard while nothing is asking for it, so that the key below
+             * opens one that is already there */
+            DashboardWarmup.tick(mc);
 
             while (keyDashboard.wasPressed()) UIScreen.open(getDashboard());
             while (keyItemEditor.wasPressed()) this.keyOpenModelBlockEditor(mc);
@@ -705,7 +957,16 @@ public class BBSModClient implements ClientModInitializer
         ClientLifecycleEvents.CLIENT_STARTED.register((e) ->
         {
             BBSRendering.setupFramebuffer();
-            provider.register(new MinecraftSourcePack());
+
+            minecraftSourcePack = new MinecraftSourcePack();
+
+            provider.register(minecraftSourcePack);
+
+            /* Last under "assets", so the user's own folder and the jar win over a resource pack's
+             * models - which is what lets a pack model be given a config.json or replaced outright. */
+            cemSourcePack = new CemSourcePack();
+
+            provider.register(cemSourcePack);
 
             Window window = MinecraftClient.getInstance().getWindow();
 
@@ -760,36 +1021,20 @@ public class BBSModClient implements ClientModInitializer
         {
             BBSMod.getAssetsPath("models/player/" + path + "/").mkdirs();
         }
+
+        BBSMod.events.post(new BBSClientReadyEvent());
     }
 
     private void keyRecordVideo(MinecraftClient mc)
     {
-        if (this.hasPendingVideoRecording())
+        if (worldExportSession.isExporting())
         {
-            if (this.hasPendingPlayFilmAndRecord() || playFilmAndRecordFilmId != null)
-            {
-                this.stopPlayFilmAndRecordSession(true);
-            }
-            else
-            {
-                this.stopVideoRecording();
-            }
+            worldExportSession.cancel();
 
             return;
         }
 
-        if (videoRecorder.isRecording())
-        {
-            this.stopVideoRecording();
-
-            return;
-        }
-
-        Window window = mc.getWindow();
-        VideoSize videoSize = this.getWorldExportVideoSize(window);
-
-        this.applyWorldExportWindowSize(videoSize);
-        this.startVideoRecording(videoSize.width, videoSize.height, false);
+        worldExportSession.start(null, null);
     }
 
     private KeyBinding createKey(String id, int key)
@@ -844,8 +1089,8 @@ public class BBSModClient implements ClientModInitializer
     }
 
     /**
-     * Start video recording and film playback together (Ctrl+F4).
-     * Recording stops automatically when the film finishes.
+     * Start video recording and film playback together (F6). Recording stops
+     * automatically when the film finishes.
      */
     private void keyPlayFilmAndRecord()
     {
@@ -855,240 +1100,26 @@ public class BBSModClient implements ClientModInitializer
         }
 
         UIFilmPanel panel = getDashboard().getPanel(UIFilmPanel.class);
+
         if (panel.getData() == null)
         {
             return;
         }
 
-        Film film = panel.getData();
-        boolean sameComboSession = film.getId().equals(playFilmAndRecordFilmId);
+        String filmId = panel.getData().getId();
 
-        if (sameComboSession && (videoRecorder.isRecording() || this.hasPendingPlayFilmAndRecord()))
+        if (worldExportSession.isExporting())
         {
-            this.stopPlayFilmAndRecordSession(true);
-
-            return;
-        }
-
-        if (videoRecorder.isRecording() || this.hasPendingVideoRecording() || playFilmAndRecordFilmId != null)
-        {
-            return;
-        }
-
-        Window window = MinecraftClient.getInstance().getWindow();
-        VideoSize videoSize = this.getWorldExportVideoSize(window);
-
-        playFilmAndRecordFilmId = film.getId();
-
-        this.applyWorldExportWindowSize(videoSize);
-        this.startVideoRecording(videoSize.width, videoSize.height, true);
-
-        Films.playFilm(film.getId(), false);
-        getFilms().setStopVideoRecordingWhenFilmFinished(film.getId());
-    }
-
-    private boolean startVideoRecording(int width, int height, boolean playFilmAndRecord)
-    {
-        float delaySeconds = Math.max(0F, BBSSettings.videoDelay.get());
-        long delayMs = (long) (delaySeconds * 1000F);
-
-        if (delayMs <= 0L)
-        {
-            videoRecorder.startRecording(null, BBSRendering.getTexture().id, width, height, BBSSettings.audioEnvironment.get());
-            BBSRendering.setCustomSize(videoRecorder.isRecording(), width, height);
-
-            return false;
-        }
-
-        this.clearPendingVideoRecording();
-
-        pendingVideoExportState = playFilmAndRecord ? PendingVideoExportState.FILM_WAIT_FIRST_TICK : PendingVideoExportState.VIDEO_DELAY;
-        pendingVideoExportStartAtMs = System.currentTimeMillis() + delayMs;
-        pendingVideoExportWidth = width;
-        pendingVideoExportHeight = height;
-
-        BBSRendering.setCustomSize(true, width, height);
-
-        return true;
-    }
-
-    private void updatePendingVideoRecording()
-    {
-        if (!this.hasPendingVideoRecording())
-        {
-            return;
-        }
-
-        if (pendingVideoExportState == PendingVideoExportState.FILM_WAIT_FIRST_TICK)
-        {
-            if (!this.pausePlayFilmAndRecordAfterFirstTick())
+            /* Toggle off only this film's combo; ignore the key while an unrelated recording runs. */
+            if (filmId.equals(worldExportSession.getFilmId()))
             {
-                return;
+                worldExportSession.cancel();
             }
 
-            pendingVideoExportState = PendingVideoExportState.FILM_DELAY_PAUSED;
-        }
-
-        if (System.currentTimeMillis() < pendingVideoExportStartAtMs)
-        {
             return;
         }
 
-        int width = pendingVideoExportWidth;
-        int height = pendingVideoExportHeight;
-        PendingVideoExportState previousState = pendingVideoExportState;
-
-        this.clearPendingVideoRecording();
-
-        if (previousState == PendingVideoExportState.FILM_DELAY_PAUSED)
-        {
-            this.resumePlayFilmAndRecordAfterDelay();
-        }
-
-        videoRecorder.startRecording(null, BBSRendering.getTexture().id, width, height, BBSSettings.audioEnvironment.get());
-        BBSRendering.setCustomSize(videoRecorder.isRecording(), width, height);
-    }
-
-    private boolean pausePlayFilmAndRecordAfterFirstTick()
-    {
-        if (playFilmAndRecordFilmId == null)
-        {
-            return true;
-        }
-
-        BaseFilmController controller = films.getController(playFilmAndRecordFilmId);
-
-        if (controller == null || controller.getTick() < 1)
-        {
-            return false;
-        }
-
-        if (!controller.paused)
-        {
-            controller.togglePause();
-        }
-
-        if (ClientNetwork.isIsBBSModOnServer())
-        {
-            ClientNetwork.sendActionState(playFilmAndRecordFilmId, ActionState.PAUSE, controller.getTick());
-        }
-
-        return true;
-    }
-
-    private void resumePlayFilmAndRecordAfterDelay()
-    {
-        if (playFilmAndRecordFilmId == null)
-        {
-            return;
-        }
-
-        BaseFilmController controller = this.getFilms().getController(playFilmAndRecordFilmId);
-        int tick = 0;
-
-        if (controller != null)
-        {
-            tick = Math.max(controller.getTick(), 0);
-
-            if (controller.paused)
-            {
-                controller.togglePause();
-            }
-        }
-
-        if (ClientNetwork.isIsBBSModOnServer())
-        {
-            ClientNetwork.sendActionState(playFilmAndRecordFilmId, ActionState.PLAY, tick);
-        }
-    }
-
-    private int getEvenVideoDimension(int value)
-    {
-        value = Math.max(value, 2);
-
-        return value % 2 == 0 ? value : value - 1;
-    }
-
-    private VideoSize getWorldExportVideoSize(Window window)
-    {
-        if (BBSSettings.worldExportResizeWindow.get())
-        {
-            int width = this.getEvenVideoDimension(BBSSettings.videoWidth.get());
-            int height = this.getEvenVideoDimension(BBSSettings.videoHeight.get());
-
-            return new VideoSize(width, height);
-        }
-
-        int width = this.getEvenVideoDimension(window.getWidth());
-        int height = this.getEvenVideoDimension(window.getHeight());
-
-        return new VideoSize(width, height);
-    }
-
-    private void applyWorldExportWindowSize(VideoSize videoSize)
-    {
-        if (BBSSettings.worldExportResizeWindow.get())
-        {
-            worldExportWindowSession.begin(videoSize.width, videoSize.height);
-
-            return;
-        }
-
-        worldExportWindowSession.clear();
-    }
-
-    private void restoreWorldExportWindowSize()
-    {
-        worldExportWindowSession.restore();
-    }
-
-    private boolean hasPendingVideoRecording()
-    {
-        return pendingVideoExportState != PendingVideoExportState.NONE;
-    }
-
-    private boolean hasPendingPlayFilmAndRecord()
-    {
-        return pendingVideoExportState == PendingVideoExportState.FILM_WAIT_FIRST_TICK || pendingVideoExportState == PendingVideoExportState.FILM_DELAY_PAUSED;
-    }
-
-    private void clearPendingVideoRecording()
-    {
-        pendingVideoExportState = PendingVideoExportState.NONE;
-        pendingVideoExportStartAtMs = 0L;
-        pendingVideoExportWidth = 0;
-        pendingVideoExportHeight = 0;
-    }
-
-    private void stopPlayFilmAndRecordSession(boolean stopFilm)
-    {
-        this.stopVideoRecording();
-
-        if (stopFilm && playFilmAndRecordFilmId != null && films.has(playFilmAndRecordFilmId))
-        {
-            Films.playFilm(playFilmAndRecordFilmId, false);
-        }
-
-        this.clearPlayFilmAndRecordSessionState();
-    }
-
-    private void clearPlayFilmAndRecordSessionState()
-    {
-        this.getFilms().clearStopVideoRecordingWhenFilmFinished();
-        playFilmAndRecordFilmId = null;
-    }
-
-    private void stopVideoRecording()
-    {
-        this.clearPendingVideoRecording();
-
-        if (videoRecorder.isRecording())
-        {
-            videoRecorder.stopRecording();
-        }
-
-        BBSRendering.setCustomSize(false, 0, 0);
-        this.restoreWorldExportWindowSize();
+        worldExportSession.start(filmId, panel.getData());
     }
 
     private void keyPauseFilm()

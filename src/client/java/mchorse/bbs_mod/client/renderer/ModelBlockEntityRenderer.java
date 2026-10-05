@@ -19,25 +19,35 @@ import mchorse.bbs_mod.forms.renderers.ModelFormRenderer;
 import mchorse.bbs_mod.forms.renderers.utils.MatrixCache;
 import mchorse.bbs_mod.graphics.Draw;
 import mchorse.bbs_mod.mixin.client.EntityRendererDispatcherInvoker;
+import mchorse.bbs_mod.mixin.client.WorldRendererAccessor;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
 import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.model_blocks.UIModelBlockPanel;
 import mchorse.bbs_mod.utils.MathUtils;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
+import mchorse.bbs_mod.utils.joml.Matrices;
 import mchorse.bbs_mod.utils.pose.Transform;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.BlockBreakingInfo;
 import net.minecraft.client.render.Camera;
+import net.minecraft.client.render.OverlayVertexConsumer;
+import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.render.block.entity.BlockEntityRenderer;
 import net.minecraft.client.render.block.entity.BlockEntityRendererFactory;
+import net.minecraft.client.render.model.ModelLoader;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.render.OverlayTexture;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+
+import java.util.SortedSet;
 
 public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockEntity>
 {
@@ -110,6 +120,9 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         ModelProperties properties = entity.getProperties();
         Transform transform = properties.getTransform();
         BlockPos pos = entity.getPos();
+
+        /* While the matrices still sit at the cell's corner. */
+        this.renderBreakingOverlay(mc, entity, matrices);
 
         matrices.push();
         matrices.translate(0.5F, 0F, 0.5F);
@@ -196,7 +209,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         double dz = position.z - z;
         double distance = Math.sqrt(dx * dx + dz * dz);
 
-        float initialYaw = transform.rotate.y;
+        float initialYaw = lookYaw(transform);
         float yaw = (float) Math.atan2(dx, dz);
         float yawContinuous = entity.updateLookYawContinuous(yaw);
         float yawDelta = yawContinuous - initialYaw;
@@ -239,7 +252,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
             }
         }
 
-        finalTransform.rotate.y = yawContinuous;
+        setLookYaw(finalTransform, yawContinuous);
 
         if (lookAt)
         {
@@ -257,7 +270,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
                 entity.snapLookYawToBase(yaw, initialYaw);
             }
 
-            finalTransform.rotate.y = initialYaw + anchorYaw;
+            setLookYaw(finalTransform, initialYaw + anchorYaw);
             headYaw = -MathUtils.toDeg(headYaw);
             pitch = -MathUtils.toDeg(isPitching ? pitch : 0F);
 
@@ -268,6 +281,100 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         }
 
         return finalTransform;
+    }
+
+    /**
+     * The block transform's ZYX yaw channel, mode-aware: the euler channel directly, or — on a
+     * quaternion transform, where the channels are stale — the quat decomposed on the branch
+     * nearest those stale channels, so the yaw reads the same value the euler mode would hold
+     * (a naive principal decomposition flips branches past ±90° and would read a wrong yaw).
+     */
+    private static float lookYaw(Transform transform)
+    {
+        if (transform.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            return Matrices.toCompatibleEulerZYXRadians(transform.quat, transform.rotate, new Vector3f()).y;
+        }
+
+        return transform.rotate.y;
+    }
+
+    /**
+     * Writes the ZYX yaw channel mode-aware: the euler channel directly, or the quaternion
+     * re-composed about the same compatible decomposition's X/Z tilt with the new yaw — the exact
+     * quaternion equivalent of {@code rotate.y = yaw}, so look-at turns a quaternion-mode block
+     * identically to a euler one.
+     */
+    private static void setLookYaw(Transform transform, float yaw)
+    {
+        if (transform.rotationMode == Transform.RotationMode.QUATERNION)
+        {
+            Vector3f euler = Matrices.toCompatibleEulerZYXRadians(transform.quat, transform.rotate, new Vector3f());
+
+            transform.quat.rotationZYX(euler.z, yaw, euler.x);
+
+            return;
+        }
+
+        transform.rotate.y = yaw;
+    }
+
+    /**
+     * The vanilla mining cracks, painted over the block's hitbox box. The
+     * block renders INVISIBLE, so vanilla's own crumbling pass (which redraws
+     * the block model) has nothing to draw on — instead the cracks go onto the
+     * body's shape here, through the same decal machinery vanilla uses: the
+     * per-stage block-breaking layers on the effect buffers, UVs projected
+     * from positions by {@link OverlayVertexConsumer}.
+     */
+    private void renderBreakingOverlay(MinecraftClient mc, ModelBlockEntity entity, MatrixStack matrices)
+    {
+        SortedSet<BlockBreakingInfo> infos = ((WorldRendererAccessor) mc.worldRenderer).bbs$getBlockBreakingProgressions().get(entity.getPos().asLong());
+
+        if (infos == null || infos.isEmpty())
+        {
+            return;
+        }
+
+        int stage = infos.last().getStage();
+
+        if (stage < 0 || stage >= ModelLoader.BLOCK_DESTRUCTION_RENDER_LAYERS.size())
+        {
+            return;
+        }
+
+        MatrixStack.Entry entry = matrices.peek();
+        VertexConsumer consumer = new OverlayVertexConsumer(
+            mc.getBufferBuilders().getEffectVertexConsumers().getBuffer(ModelLoader.BLOCK_DESTRUCTION_RENDER_LAYERS.get(stage)),
+            entry.getPositionMatrix(), entry.getNormalMatrix(), 1F
+        );
+
+        Box box = entity.getShape().getBoundingBox();
+        int light = WorldRenderer.getLightmapCoordinates(entity.getWorld(), entity.getPos());
+        float x1 = (float) box.minX, y1 = (float) box.minY, z1 = (float) box.minZ;
+        float x2 = (float) box.maxX, y2 = (float) box.maxY, z2 = (float) box.maxZ;
+
+        /* Vertices wind counter-clockwise seen from outside each face. */
+        quad(consumer, entry, light, 0F, -1F, 0F, x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2);
+        quad(consumer, entry, light, 0F, 1F, 0F, x1, y2, z2, x2, y2, z2, x2, y2, z1, x1, y2, z1);
+        quad(consumer, entry, light, 0F, 0F, -1F, x1, y1, z1, x1, y2, z1, x2, y2, z1, x2, y1, z1);
+        quad(consumer, entry, light, 0F, 0F, 1F, x2, y1, z2, x2, y2, z2, x1, y2, z2, x1, y1, z2);
+        quad(consumer, entry, light, -1F, 0F, 0F, x1, y1, z2, x1, y2, z2, x1, y2, z1, x1, y1, z1);
+        quad(consumer, entry, light, 1F, 0F, 0F, x2, y1, z1, x2, y2, z1, x2, y2, z2, x2, y1, z2);
+    }
+
+    private static void quad(VertexConsumer consumer, MatrixStack.Entry entry, int light, float nx, float ny, float nz, float... xyz)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            consumer.vertex(entry.getPositionMatrix(), xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2])
+                .color(255, 255, 255, 255)
+                .texture(0F, 0F)
+                .overlay(OverlayTexture.DEFAULT_UV)
+                .light(light)
+                .normal(entry.getNormalMatrix(), nx, ny, nz)
+                .next();
+        }
     }
 
     @Override
@@ -306,7 +413,7 @@ public class ModelBlockEntityRenderer implements BlockEntityRenderer<ModelBlockE
         {
             if (dashboard.getPanels().panel instanceof UIModelBlockPanel modelBlockPanel)
             {
-                return !modelBlockPanel.isEditing(entity) || UIModelBlockPanel.toggleRendering;
+                return !modelBlockPanel.isEditing(entity) || modelBlockPanel.isRenderingToggled();
             }
         }
 

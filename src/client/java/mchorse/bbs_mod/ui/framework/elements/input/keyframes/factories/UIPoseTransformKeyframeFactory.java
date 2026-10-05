@@ -6,28 +6,24 @@ import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIToggle;
 import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UIPropTransform;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.utils.UIConstants;
+import mchorse.bbs_mod.ui.framework.elements.input.UISliderTrackpad;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.utils.UI;
-import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.Axis;
-import mchorse.bbs_mod.utils.MathUtils;
-import mchorse.bbs_mod.utils.colors.Colors;
-import mchorse.bbs_mod.utils.joml.Vectors;
+import mchorse.bbs_mod.ui.utils.pose.UIPoseEditor;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.pose.PoseTransform;
 import mchorse.bbs_mod.utils.pose.Transform;
-import org.joml.Vector3d;
 
 import java.util.function.Consumer;
 
 public class UIPoseTransformKeyframeFactory extends UIKeyframeFactory<PoseTransform>
 {
-    public UITrackpad fix;
+    public UISliderTrackpad fix;
+    public UIToggle boneVisible;
     public UIColor color;
-    public UIToggle lighting;
+    public UIColor overlay;
+    public UISliderTrackpad lighting;
     public UIPropTransform transform;
 
     public UIPoseTransformKeyframeFactory(Keyframe<PoseTransform> keyframe, UIKeyframes editor)
@@ -40,16 +36,23 @@ public class UIPoseTransformKeyframeFactory extends UIKeyframeFactory<PoseTransf
 
         this.keys().register(Keys.TRANSFORMATIONS_TOGGLE_FIX, this::toggleFix).category(UIKeys.TRANSFORMS_KEYS_CATEGORY);
 
-        this.fix = new UITrackpad((v) ->
+        this.fix = new UISliderTrackpad((v) ->
         {
             if (this.transform.getTransform() instanceof PoseTransform)
             {
                 UIPoseTransforms.apply(editor, keyframe, (poseT) -> poseT.fix = v.floatValue());
             }
         });
-        this.fix.limit(0D, 1D).increment(1D).values(0.1, 0.05D, 0.2D);
+        this.fix.limit(0D, 1D).increment(0.1D).values(0.1, 0.05D, 0.2D);
         this.fix.tooltip(UIKeys.POSE_CONTEXT_FIX_TOOLTIP);
         this.fix.setValue(keyframe.getValue().fix);
+
+        this.boneVisible = new UIToggle(UIKeys.MODEL_EDITOR_BONE_VISIBLE, keyframe.getValue().visible, (toggle) ->
+        {
+            boolean visible = toggle.getValue();
+
+            UIPoseTransforms.apply(editor, keyframe, (poseT) -> poseT.visible = visible);
+        });
 
         this.color = new UIColor((c) ->
         {
@@ -61,17 +64,38 @@ public class UIPoseTransformKeyframeFactory extends UIKeyframeFactory<PoseTransf
         this.color.withAlpha();
         this.color.setColor(keyframe.getValue().color.getARGBColor());
 
-        this.lighting = new UIToggle(UIKeys.FORMS_EDITORS_GENERAL_LIGHTING, (b) ->
+        this.overlay = new UIColor((c) ->
         {
             if (this.transform.getTransform() instanceof PoseTransform)
             {
-                UIPoseTransforms.apply(editor, keyframe, (poseT) -> poseT.lighting = b.getValue() ? 0F : 1F);
+                UIPoseTransforms.apply(editor, keyframe, (poseT) -> poseT.overlay.set(c));
             }
         });
-        this.lighting.h(UIConstants.CONTROL_HEIGHT);
-        this.lighting.setValue(keyframe.getValue().lighting == 0F);
+        this.overlay.withAlpha();
+        this.overlay.tooltip(UIKeys.FORMS_EDITORS_MATERIAL_OVERLAY_TOOLTIP);
+        this.overlay.setColor(keyframe.getValue().overlay.getARGBColor());
 
-        this.scroll.add(UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix), UI.row(this.color, this.lighting), this.transform.marginTop(4));
+        /* A 0..1 slider, like every other bone panel — this used to be a toggle writing 1F/0F
+         * inverted, which was the only place where glow wasn't a value you could dial in. */
+        this.lighting = new UISliderTrackpad((v) ->
+        {
+            if (this.transform.getTransform() instanceof PoseTransform)
+            {
+                UIPoseTransforms.apply(editor, keyframe, (poseT) -> poseT.lighting = v.floatValue());
+            }
+        });
+        this.lighting.limit(0D, 1D);
+        this.lighting.tooltip(UIKeys.FORMS_EDITORS_MATERIAL_GLOW_TOOLTIP);
+        this.lighting.setValue(keyframe.getValue().lighting);
+
+        /* Same rows in the same order, and the material section built by UIPoseEditor itself —
+         * this panel is that one without the bone list, so it has to read as the same panel. */
+        this.scroll.add(
+            this.boneVisible,
+            UI.labelRow(UIKeys.POSE_CONTEXT_FIX, this.fix),
+            this.transform,
+            UIPoseEditor.materialSection(this.color, this.overlay, this.lighting)
+        );
     }
 
     private void toggleFix()
@@ -95,36 +119,24 @@ public class UIPoseTransformKeyframeFactory extends UIKeyframeFactory<PoseTransf
         }
 
         @Override
+        protected UIKeyframes getKeyframes()
+        {
+            return this.editor.editor;
+        }
+
+        @Override
         protected void applyToSelection(Consumer<Transform> consumer)
         {
             apply(this.editor.editor, this.editor.keyframe, (poseT) -> consumer.accept(poseT));
         }
 
         @Override
-        protected void applyDuringRecording(int tick, Consumer<Transform> consumer)
-        {
-            applyRecording(this.editor.editor, this.editor.keyframe, tick, (poseT) -> consumer.accept(poseT));
-        }
-
-        @Override
-        protected Transform getRecordedTransform(int tick)
+        protected Transform getAutoKeyTransform(float tick)
         {
             UIKeyframeSheet sheet = this.editor.editor.getGraph().getSheet(this.editor.keyframe);
-            Keyframe<PoseTransform> recorded = UIReplaysEditorUtils.ensureKeyframe(sheet, tick);
+            Keyframe<PoseTransform> target = sheet == null ? null : sheet.ensureKeyframe(tick);
 
-            return recorded == null ? null : recorded.getValue();
-        }
-
-        public static void applyRecording(UIKeyframes editor, Keyframe keyframe, int tick, Consumer<PoseTransform> consumer)
-        {
-            UIReplaysEditorUtils.forEachRecordedKeyframe(editor, keyframe, tick, (recorded) ->
-            {
-                PoseTransform transform = (PoseTransform) recorded.getValue();
-
-                recorded.preNotify();
-                consumer.accept(transform);
-                recorded.postNotify();
-            });
+            return target == null ? null : target.getValue();
         }
 
         public static void apply(UIKeyframes editor, Keyframe keyframe, Consumer<PoseTransform> consumer)

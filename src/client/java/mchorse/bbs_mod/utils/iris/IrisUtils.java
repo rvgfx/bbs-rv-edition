@@ -2,6 +2,8 @@ package mchorse.bbs_mod.utils.iris;
 
 import joptsimple.internal.Strings;
 import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureManager;
 import mchorse.bbs_mod.resources.Link;
@@ -10,7 +12,9 @@ import mchorse.bbs_mod.utils.DataPath;
 import net.irisshaders.iris.Iris;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
+import net.irisshaders.iris.pipeline.ShaderRenderingPipeline;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
+import net.irisshaders.iris.shadows.ShadowRenderer;
 import net.irisshaders.iris.shaderpack.LanguageMap;
 import net.irisshaders.iris.shaderpack.ShaderPack;
 import net.irisshaders.iris.shaderpack.option.menu.OptionMenuContainer;
@@ -20,13 +24,17 @@ import net.irisshaders.iris.shaderpack.option.menu.OptionMenuLinkElement;
 import net.irisshaders.iris.shaderpack.option.menu.OptionMenuOptionElement;
 import net.irisshaders.iris.shaderpack.properties.ShaderProperties;
 import net.irisshaders.iris.texture.TextureTracker;
+import net.irisshaders.iris.texture.pbr.PBRTextureManager;
 import net.irisshaders.iris.texture.pbr.loader.PBRTextureLoaderRegistry;
 import net.irisshaders.iris.uniforms.custom.cached.CachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.FloatCachedUniform;
 import net.irisshaders.iris.uniforms.custom.cached.IntCachedUniform;
+import net.irisshaders.iris.vertices.ImmediateState;
+import net.irisshaders.iris.vertices.IrisExtendedBufferBuilder;
 import net.irisshaders.iris.vertices.NormI8;
 import net.irisshaders.iris.vertices.NormalHelper;
 import net.irisshaders.iris.vertices.views.TriView;
+import net.minecraft.client.render.BufferBuilder;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,7 +47,9 @@ import java.util.Set;
 public class IrisUtils
 {
     private static Set<Texture> textureSet = new HashSet<>();
+    private static Map<Integer, String> trackedPbrVariants = new HashMap<>();
     private static ShaderProperties properties;
+    private static int offscreenDepth;
 
     public static void setShaderProperties(ShaderProperties shaderProperties)
     {
@@ -139,6 +149,34 @@ public class IrisUtils
     public static void setup()
     {
         PBRTextureLoaderRegistry.INSTANCE.register(IrisTextureWrapper.class, new IrisTextureWrapperLoader());
+        PBRTextureLoaderRegistry.INSTANCE.register(IrisPbrConstWrapper.class, new IrisPbrConstLoader());
+    }
+
+    /**
+     * Register a PBR-slider albedo variant with Iris' texture tracker, so the pack's
+     * normal/specular lookups for that albedo land in {@link IrisPbrConstLoader} with this
+     * slider snapshot. A CHANGED snapshot (a slider edit, or an animated slider track)
+     * re-tracks the wrapper and invalidates Iris' PBR holder for the id — the maps then
+     * regenerate lazily on the pack's next lookup, with no new albedo copy. That's what makes
+     * the sliders keyframable at a sane cost: per change it's a 1x1 specular re-bake (and a
+     * relief re-derive only when relief itself moved).
+     */
+    public static void trackPbrVariant(Texture variant, Link albedo, float smoothness, float metallic, float sss, float emission, float relief)
+    {
+        String snapshot = Math.round(smoothness * 255F) + ":" + Math.round(metallic * 255F)
+            + ":" + Math.round(sss * 255F) + ":" + Math.round(emission * 255F) + ":" + Math.round(relief * 255F);
+        String last = trackedPbrVariants.put(variant.id, snapshot);
+
+        if (!snapshot.equals(last))
+        {
+            TextureTracker.INSTANCE.trackTexture(variant.id, new IrisPbrConstWrapper(albedo, variant.id, smoothness, metallic, sss, emission, relief));
+
+            if (last != null)
+            {
+                PBRTextureManager.INSTANCE.onDeleteTexture(variant.id);
+                PBRTextureManager.notifyPBRTexturesChanged();
+            }
+        }
     }
 
     public static void trackTexture(Texture texture)
@@ -186,9 +224,119 @@ public class IrisUtils
         }
     }
 
+    /**
+     * Whether the pack currently replaces the game's own programs. It says no while the main
+     * framebuffer isn't bound — that is, while something renders off-screen — so a caller can
+     * tell "a pack is loaded" apart from "the pack is shading this very draw".
+     */
+    public static boolean shouldOverrideShaders()
+    {
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+
+        return pipeline instanceof ShaderRenderingPipeline shaders && shaders.shouldOverrideShaders();
+    }
+
+    /**
+     * Run a render that goes into a framebuffer of ours instead of the world's: the pack is told
+     * the main target is gone (so it stops overriding programs) and the shadow pass is turned off
+     * for the duration. Only the outermost call flips the pack's state — nested off-screen
+     * renders would otherwise hand the main target back while the outer one is still drawing.
+     */
+    public static void renderOffscreen(Runnable render)
+    {
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        boolean override = offscreenDepth == 0 && pipeline instanceof ShaderRenderingPipeline shaders && shaders.shouldOverrideShaders();
+        boolean shadow = ShadowRenderer.ACTIVE;
+
+        if (FramebufferDebug.logging)
+        {
+            FramebufferDebug.log("offscreen", "enter override=" + override + " offscreenDepth=" + offscreenDepth
+                + " shadowActive=" + shadow + " shouldOverride=" + shouldOverrideShaders()
+                + " pipeline=" + (pipeline == null ? "null" : pipeline.getClass().getSimpleName()));
+        }
+
+        try
+        {
+            if (override)
+            {
+                pipeline.getRenderTargetStateListener().setIsMainBound(false);
+            }
+
+            offscreenDepth += 1;
+            ShadowRenderer.ACTIVE = false;
+
+            if (FramebufferDebug.logging)
+            {
+                FramebufferDebug.log("offscreen", "inside shouldOverride=" + shouldOverrideShaders()
+                    + " shadingThisDraw=" + BBSRendering.isIrisWorldShadersEnabled() + " shadowPass=" + isShadowPass());
+            }
+
+            render.run();
+        }
+        finally
+        {
+            offscreenDepth -= 1;
+            ShadowRenderer.ACTIVE = shadow;
+
+            if (override)
+            {
+                pipeline.getRenderTargetStateListener().setIsMainBound(true);
+            }
+
+            if (FramebufferDebug.logging)
+            {
+                FramebufferDebug.log("offscreen", "leave offscreenDepth=" + offscreenDepth + " shouldOverride=" + shouldOverrideShaders());
+            }
+        }
+    }
+
+    /**
+     * Whether a render into a framebuffer of ours is going on right now. The pack is told the main
+     * target is gone for the duration, and the flags it checks ahead of that - the shadow pass and
+     * the hand - are answered to match (see HandRendererMixin).
+     */
+    public static boolean isRenderingOffscreen()
+    {
+        return offscreenDepth > 0;
+    }
+
     public static boolean isShadowPass()
     {
         return IrisApi.getInstance().isRenderingShadowPass();
+    }
+
+    /**
+     * Match the vertex layout of an upload to the buffer actually being uploaded.
+     *
+     * <p>Iris picks that layout twice. A buffer's own format is chosen when the render layer
+     * begins: it gains tangents and mid-texture coordinates while the level renders, and stays
+     * plain vanilla anywhere else (a form editor viewport, an item in a GUI). The vertex array's
+     * layout is chosen again inside {@link net.minecraft.client.render.VertexFormat#setupState()},
+     * and there Iris reads a flag instead — a plain entity format is set up with the
+     * <em>extended</em> stride whenever that flag is up. The two agree only because Iris drops the
+     * flag for the duration of the immediate provider's draw, the one place vanilla ever uploads
+     * a buffer of the second kind.</p>
+     *
+     * <p>So anything that ends and uploads such a buffer by itself has to keep the pair honest,
+     * or the vertex array reads 36 byte vertices at the extended stride and the geometry tears
+     * into a fan of stretched triangles. The buffer knows which of the two it is, so ask it
+     * rather than repeating Iris' reasoning about it.</p>
+     */
+    public static boolean beginBufferUpload(BufferBuilder builder)
+    {
+        boolean extended = ImmediateState.renderWithExtendedVertexFormat;
+
+        if (builder instanceof IrisExtendedBufferBuilder buffer && !buffer.iris$extending())
+        {
+            ImmediateState.renderWithExtendedVertexFormat = false;
+        }
+
+        return extended;
+    }
+
+    public static void endBufferUpload(boolean extended)
+    {
+        ImmediateState.renderWithExtendedVertexFormat = extended;
     }
 
     public static float[] calculateTangents(float[] v, float[] n, float[] u)
@@ -250,6 +398,8 @@ public class IrisUtils
 
     public static void addUniforms(List<CachedUniform> list, Map<String, ShaderCurves.ShaderVariable> variableMap)
     {
+        list.add(new FloatCachedUniform(ShaderSunRotation.UNIFORM, UniformUpdateFrequency.PER_FRAME, BBSRendering::getSunHorizontalRotation));
+
         for (ShaderCurves.ShaderVariable value : variableMap.values())
         {
             if (value.integer)

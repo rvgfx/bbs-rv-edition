@@ -3,6 +3,7 @@ package mchorse.bbs_mod.ui.utils;
 import mchorse.bbs_mod.l10n.keys.IKey;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.UIScrollView;
+import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
 import mchorse.bbs_mod.utils.colors.Colors;
@@ -93,13 +94,27 @@ public class UI
 
     public static UIElement labelRow(IKey label, int controlWidth, UIElement element)
     {
+        return labelRow(label(label, UIConstants.CONTROL_HEIGHT).labelAnchor(0, 0.5F), controlWidth, element);
+    }
+
+    /**
+     * The same grid as {@link #labelRow(IKey, UIElement)}, but the left side is an
+     * element rather than a name — for a row whose label slot does something itself
+     * (a toggle that names itself, say). Its control still pins to the shared
+     * divider column, so such a row lines up with the plain label rows around it
+     * instead of spanning the full width on its own.
+     */
+    public static UIElement labelRow(UIElement label, UIElement element)
+    {
+        return labelRow(label, UIConstants.VALUE_WIDTH, element);
+    }
+
+    public static UIElement labelRow(UIElement label, int controlWidth, UIElement element)
+    {
         UIElement row = new UIElement();
 
         row.row(UIConstants.MARGIN).preferred(0).height(UIConstants.CONTROL_HEIGHT);
-        row.add(
-            label(label, UIConstants.CONTROL_HEIGHT).labelAnchor(0, 0.5F),
-            element.w(controlWidth)
-        );
+        row.add(label, element.w(controlWidth));
 
         return row;
     }
@@ -127,5 +142,26 @@ public class UI
         scrollView.add(elements);
 
         return scrollView;
+    }
+
+    /** The verbs of a list — add, duplicate, remove — as a row of compact icons over it (the replay list's idiom). */
+    public static UIElement strip(UIIcon... icons)
+    {
+        return strip(UIConstants.CONTROL_HEIGHT, icons);
+    }
+
+    public static UIElement strip(int size, UIIcon... icons)
+    {
+        UIElement strip = new UIElement();
+
+        strip.row(0).height(size);
+
+        for (UIIcon icon : icons)
+        {
+            icon.wh(size, size);
+            strip.add(icon);
+        }
+
+        return strip;
     }
 }

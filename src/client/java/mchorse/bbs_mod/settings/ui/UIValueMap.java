@@ -11,6 +11,7 @@ import mchorse.bbs_mod.settings.values.numeric.ValueBoolean;
 import mchorse.bbs_mod.settings.values.numeric.ValueDouble;
 import mchorse.bbs_mod.settings.values.numeric.ValueFloat;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.settings.values.ui.ValueKeyframeStyle;
 import mchorse.bbs_mod.settings.values.ui.ValueLanguage;
 import mchorse.bbs_mod.settings.values.ui.ValueOrder;
 import mchorse.bbs_mod.ui.UIKeys;
@@ -23,10 +24,12 @@ import mchorse.bbs_mod.ui.framework.elements.input.UIColor;
 import mchorse.bbs_mod.ui.framework.elements.input.UIKeybind;
 import mchorse.bbs_mod.ui.framework.elements.input.UIOrder;
 import mchorse.bbs_mod.ui.framework.elements.input.UITexturePicker;
-import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.IKeyframeShapeRenderer;
-import mchorse.bbs_mod.ui.framework.elements.input.keyframes.shapes.KeyframeShapeRenderers;
+import mchorse.bbs_mod.ui.framework.elements.input.UINumericInput;
+import mchorse.bbs_mod.ui.framework.elements.context.UIInterpolationContextMenu;
+import mchorse.bbs_mod.utils.interps.Interpolation;
+import mchorse.bbs_mod.utils.interps.Interpolations;
 import mchorse.bbs_mod.ui.framework.elements.input.text.UITextbox;
+import mchorse.bbs_mod.ui.framework.elements.input.keyframes.overlays.UIKeyframeStyleOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UILabelOverlayPanel;
 import mchorse.bbs_mod.ui.framework.elements.overlay.UIOverlay;
 import mchorse.bbs_mod.ui.framework.elements.utils.UILabel;
@@ -34,25 +37,26 @@ import mchorse.bbs_mod.ui.framework.elements.utils.UIText;
 import mchorse.bbs_mod.ui.utils.Label;
 import mchorse.bbs_mod.ui.utils.UI;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
-import mchorse.bbs_mod.utils.FFMpegUtils;
-import mchorse.bbs_mod.utils.OS;
-import mchorse.bbs_mod.utils.keyframes.KeyframeShape;
+import mchorse.bbs_mod.ui.utils.values.UIValues;
 
-import java.io.File;
-import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.function.Consumer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public class UIValueMap
 {
     private static Map<Class<? extends BaseValue>, IUIValueFactory<? extends BaseValue>> factories = new HashMap<>();
 
-    static
+    /**
+     * Fills the registry. Called by BBS while it initialises, and followed by the event that
+     * lets addons add to it.
+     *
+     * <p>This used to be a static initialiser, which ran whenever something first touched the
+     * class — a moment nobody chose and an addon could not aim at.</p>
+     */
+    public static void setup()
     {
         register(ValueBoolean.class, (value, ui) ->
         {
@@ -63,7 +67,7 @@ public class UIValueMap
 
         register(ValueDouble.class, (value, ui) ->
         {
-            UITrackpad trackpad = UIValueFactory.doubleUI(value, null);
+            UINumericInput<?> trackpad = UIValueFactory.doubleUI(value, null);
 
             trackpad.w(90);
 
@@ -72,7 +76,7 @@ public class UIValueMap
 
         register(ValueFloat.class, (value, ui) ->
         {
-            UITrackpad trackpad = UIValueFactory.floatUI(value, null);
+            UINumericInput<?> trackpad = UIValueFactory.floatUI(value, null);
 
             trackpad.w(90);
 
@@ -96,7 +100,7 @@ public class UIValueMap
                         panel.refresh();
                     }
                 };
-                button.setValue(value.get());
+                button.valueBinding(() -> button.setValue(value.get()));
                 button.w(90);
 
                 return Arrays.asList(UIValueFactory.column(button, value));
@@ -110,33 +114,6 @@ public class UIValueMap
 
                 return Arrays.asList(UIValueFactory.column(color, value));
             }
-            else if (value == BBSSettings.keyframeDefaultShape)
-            {
-                UIIcon button = new UIIcon(() ->
-                {
-                    IKeyframeShapeRenderer r = KeyframeShapeRenderers.SHAPES.get(shapeAt(value.get()));
-
-                    return r != null ? r.getIcon() : Icons.SHAPES;
-                }, (b) -> b.getContext().replaceContextMenu((menu) ->
-                {
-                    KeyframeShape current = shapeAt(value.get());
-
-                    for (KeyframeShape shape : KeyframeShape.values())
-                    {
-                        IKeyframeShapeRenderer renderer = KeyframeShapeRenderers.SHAPES.get(shape);
-
-                        if (renderer == null)
-                        {
-                            continue;
-                        }
-
-                        menu.action(renderer.getIcon(), renderer.getLabel(), shape == current, () -> value.set(shape.ordinal()));
-                    }
-                }));
-                button.tooltip(shapeButtonLabel(value.get()));
-
-                return Arrays.asList(UIValueFactory.column(button, value));
-            }
             else if (value.getSubtype() == ValueInt.Subtype.MODES)
             {
                 UICirculate button = new UICirculate(null);
@@ -147,13 +124,13 @@ public class UIValueMap
                 }
 
                 button.callback = (b) -> value.set(button.getValue());
-                button.setValue(value.get());
+                button.valueBinding(() -> button.setValue(value.get()));
                 button.w(90);
 
                 return Arrays.asList(UIValueFactory.column(button, value));
             }
 
-            UITrackpad trackpad = UIValueFactory.intUI(value, null);
+            UINumericInput<?> trackpad = UIValueFactory.intUI(value, null);
 
             trackpad.w(90);
 
@@ -192,37 +169,27 @@ public class UIValueMap
 
         register(ValueString.class, (value, ui) ->
         {
+            if (value == BBSSettings.keyframeDefaultInterpolation)
+            {
+                UIIcon button = new UIIcon(
+                    () -> UIInterpolationContextMenu.INTERP_ICON_MAP.getOrDefault(BBSSettings.getDefaultKeyframeInterpolation(), Icons.INTERP_LINEAR),
+                    (b) ->
+                    {
+                        /* Open the same interpolation picker used everywhere else (grid + graph preview),
+                         * seeded from the current value, and store the picked type's key back. */
+                        Interpolation interpolation = new Interpolation("interp", Interpolations.MAP, BBSSettings.getDefaultKeyframeInterpolation());
+
+                        b.getContext().replaceContextMenu(new UIInterpolationContextMenu(interpolation)
+                            .callback(() -> value.set(interpolation.getInterp().getKey())));
+                    }
+                );
+
+                return Arrays.asList(UIValueFactory.column(button, value));
+            }
+
             UITextbox textbox = UIValueFactory.stringUI(value, null);
 
             textbox.w(90);
-
-            if (value == BBSSettings.videoEncoderPath && OS.CURRENT == OS.WINDOWS)
-            {
-                textbox.context((menu) ->
-                {
-                    menu.action(Icons.SEARCH, UIKeys.GENERAL_FFMPEG_FIND, () ->
-                    {
-                        textbox.getContext().replaceContextMenu((submenu) ->
-                        {
-                            File[] files = File.listRoots();
-                            File file = files.length == 0 ? new File("C:\\") : files[0];
-                            Optional<Path> ffmpeg = FFMpegUtils.findFFMpeg(file.toPath());
-
-                            if (ffmpeg.isPresent())
-                            {
-                                Path path = ffmpeg.get();
-                                String pathString = path.toAbsolutePath().toString();
-
-                                submenu.action(Icons.VIDEO_CAMERA, IKey.constant(pathString), () ->
-                                {
-                                    textbox.setText(pathString);
-                                    value.set(pathString);
-                                });
-                            }
-                        });
-                    });
-                });
-            }
 
             return Arrays.asList(UIValueFactory.column(textbox, value));
         });
@@ -230,6 +197,20 @@ public class UIValueMap
         register(ValueOrder.class, (value, ui) ->
         {
             return Arrays.asList(UIValueFactory.column(new UIOrder(value), value));
+        });
+
+        /* The very panel that restyles a keyframe, pointed at the style new keyframes are born with */
+        register(ValueKeyframeStyle.class, (value, ui) ->
+        {
+            UIButton button = new UIButton(UIKeys.CONFIG_KEYFRAME_STYLE_EDIT, (b) -> UIOverlay.addOverlay(
+                ui.getContext(),
+                new UIKeyframeStyleOverlayPanel(value.get(), (style) -> value.set(style.copy())),
+                220, 200
+            ));
+
+            button.w(90);
+
+            return Arrays.asList(UIValueFactory.column(button, value));
         });
 
         register(ValueKeyCombo.class, (value, ui) ->
@@ -245,20 +226,6 @@ public class UIValueMap
 
     }
 
-    private static KeyframeShape shapeAt(int ordinal)
-    {
-        KeyframeShape[] values = KeyframeShape.values();
-
-        return ordinal >= 0 && ordinal < values.length ? values[ordinal] : KeyframeShape.SQUARE;
-    }
-
-    private static IKey shapeButtonLabel(int ordinal)
-    {
-        IKeyframeShapeRenderer renderer = KeyframeShapeRenderers.SHAPES.get(shapeAt(ordinal));
-
-        return renderer != null ? renderer.getLabel() : UIKeys.KEYFRAMES_SHAPES_SQUARE;
-    }
-
     public static <T extends BaseValue> void register(Class<T> clazz, IUIValueFactory<T> factory)
     {
         factories.put(clazz, factory);
@@ -268,7 +235,25 @@ public class UIValueMap
     {
         IUIValueFactory<T> factory = (IUIValueFactory<T>) factories.get(value.getClass());
 
-        return factory == null ? Collections.emptyList() : factory.create(value, element);
+        if (factory == null)
+        {
+            return Collections.emptyList();
+        }
+
+        List<UIElement> elements = factory.create(value, element);
+
+        /* Every setting answers a right click the same way, so it is hung here
+         * rather than in each factory above. Rebuilding the list is what puts
+         * the reset on screen — the widgets read their value when they are
+         * made, not while they live. */
+        Runnable refresh = element instanceof UISettingsOverlayPanel panel ? panel::refresh : null;
+
+        for (UIElement created : elements)
+        {
+            UIValues.resettable(created, value, refresh);
+        }
+
+        return elements;
     }
 
     public static interface IUIValueFactory <T extends BaseValue>

@@ -3,28 +3,43 @@ package mchorse.bbs_mod.film.markers;
 import mchorse.bbs_mod.settings.values.core.ValueGroup;
 import mchorse.bbs_mod.settings.values.core.ValueString;
 import mchorse.bbs_mod.settings.values.numeric.ValueInt;
+import mchorse.bbs_mod.utils.colors.Colors;
 
+/**
+ * A named point in time on the film's timeline — "the music comes in here", "recut from here".
+ *
+ * <p>A marker means nothing to playback: it is an author's note that happens to be addressed by
+ * tick rather than by name, which is why it carries no behaviour beyond where it sits and how it
+ * reads. It belongs to the film as a whole, not to a clip, a track or a replay.
+ */
 public class FilmMarker extends ValueGroup
 {
-    /** Tick where the marker sits on the timeline. */
-    public final ValueInt tick = new ValueInt("tick", 0);
-    /** Duration in ticks (0 = no duration band). */
-    public final ValueInt duration = new ValueInt("duration", 0);
-    /** Label shown in the tooltip. */
-    public final ValueString label = new ValueString("label", "");
-    /**
-     * Packed RGB color (no alpha — renderer applies fixed alpha).
-     * Default: yellow #FFFF55.
-     */
-    public final ValueInt color = new ValueInt("color", 0xFFFF55);
+    public static final int DEFAULT_COLOR = 0xffcc44;
+
+    public final ValueInt tick = new ValueInt("tick", 0, 0, Integer.MAX_VALUE);
+    public final ValueString title = new ValueString("title", "");
+    /** RGB without alpha, like every other authored colour in the tree. */
+    public final ValueInt color = new ValueInt("color", DEFAULT_COLOR).color();
 
     public FilmMarker(String id)
     {
         super(id);
 
         this.add(this.tick);
-        this.add(this.duration);
-        this.add(this.label);
+        this.add(this.title);
         this.add(this.color);
+    }
+
+    /**
+     * A fresh marker gets a random hue rather than one shared colour: markers are told apart at a
+     * glance on the ruler, and a row of identical pins defeats that before anyone gets round to
+     * naming them. Saturation and value are pinned high so every draw reads on the dark strip.
+     *
+     * <p>{@link #DEFAULT_COLOR} stays the value's own default, so resetting the field lands on
+     * something sane instead of rolling again.
+     */
+    public static int randomBrightColor()
+    {
+        return Colors.randomBright();
     }
 }

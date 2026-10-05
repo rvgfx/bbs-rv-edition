@@ -1,7 +1,7 @@
 package mchorse.bbs_mod.cubic.physics;
 
 import mchorse.bbs_mod.cubic.IModel;
-import mchorse.bbs_mod.cubic.constraints.ModelConstraintsConfig;
+import mchorse.bbs_mod.cubic.constraints.BoneConstraint;
 import mchorse.bbs_mod.cubic.render.CubicRenderer.PivotFrame;
 import mchorse.bbs_mod.utils.joml.Matrices;
 import net.minecraft.util.math.BlockPos;
@@ -56,6 +56,26 @@ final class ChainSolver
      */
     private static final int MAX_TICK_CATCHUP = 4;
 
+    /**
+     * Sub-step budget of the settling pass. A seed puts the chain on the animated pose, which is not a shape
+     * it can hold at any stiffness below 1 — it would sag out of it over the following ticks. Settling runs
+     * the same sub-step ahead of time, so the shape a seed produces IS the shape the sim converges to, and a
+     * re-seed stops being visible: before this, every scrub popped the chain back to the pose and let it fall
+     * again, and a film starting at tick 0 spent its first second waking up. A larger budget than
+     * {@link #PHYSICS_MAX_STEPS} is affordable because it is spent once per seed, not once per tick.
+     */
+    private static final int SETTLE_MAX_SUBSTEPS = 180;
+
+    /** Per-sub-step displacement below which the settling pass calls the chain stopped, in model units. */
+    private static final float SETTLE_EPS = 1.0e-4F;
+
+    /**
+     * Floor on damping while settling. Damping decides how fast the transient dies, not where it dies, so
+     * raising it only fast-forwards to the same rest shape — without it a loose chain would still be
+     * swinging when the sub-step budget runs out.
+     */
+    private static final float SETTLE_DAMPING = 0.5F;
+
     private ChainSolver()
     {
     }
@@ -96,7 +116,7 @@ final class ChainSolver
             return;
         }
 
-        Vector3f tipDir = lengths != null && lengths.length >= pivotCount ? PhysicsRig.tipRestDirectionLocal(model, ids) : null;
+        Vector3f tipDir = lengths != null && lengths.length >= pivotCount ? tipRestDirection(model, ids) : null;
 
         if (tipDir == null || tipDir.lengthSquared() < EPS * EPS)
         {
@@ -111,17 +131,18 @@ final class ChainSolver
     }
 
     /**
-     * Interpolates the settled chain shape of the two latest simulation ticks and re-roots it onto the live
-     * anchor. The chain is rebuilt segment by segment from the anchor outwards: each segment's direction is
-     * slerped between the two ticks (so the bone swings along an arc, not a straight chord) and its length is
-     * lerped, while the anchor's leftover sub-tick rotation carries the whole chain. This keeps the motion
-     * smooth between simulation ticks instead of reading as stepping.
+     * Interpolates the settled chain shape of the two latest simulation ticks and plants it on the live
+     * anchor. The shapes are blended in the anchor-local frame they were snapshot in — each segment's
+     * direction is slerped between the two ticks (so the bone swings along an arc, not a straight chord)
+     * and its length is lerped — and the blend is carried into the world by the live anchor frame. The
+     * anchor's own motion, turning included, is thus applied once and live, never quantized to the
+     * simulation rate; only the chain's internal lag is tick-sampled, and that is what the blend smooths.
      */
     static Vector3f[] renderInterpolate(ChainState state, float transition, Vector3f liveAnchor, Quaternionf liveAnchorRotation, Vector3f target)
     {
         Vector3f[] render = state.render;
-        Vector3f[] settled = state.settled;
-        Vector3f[] settledPrev = state.settledPrev;
+        Vector3f[] settled = state.settledLocal;
+        Vector3f[] settledPrev = state.settledPrevLocal;
 
         if (render == null || settled == null || settledPrev == null || render.length != settled.length || settledPrev.length != settled.length)
         {
@@ -132,19 +153,16 @@ final class ChainSolver
 
         Vector3f dir = new Vector3f();
         Vector3f dirCurr = new Vector3f();
-        Quaternionf swing = new Quaternionf();
         Quaternionf segRot = new Quaternionf();
         Quaternionf frac = new Quaternionf();
-
-        swing.set(liveAnchorRotation).mul(segRot.set(state.anchorRotation).invert()).normalize(); // anchor sub-tick swing
 
         /* Root point is pinned to the live anchor, the rest is rebuilt outwards from it */
         render[0].set(liveAnchor);
 
         for (int i = 0; i + 1 < render.length; i++)
         {
-            dir.set(settledPrev[i + 1]).sub(settledPrev[i]); // segment last tick
-            dirCurr.set(settled[i + 1]).sub(settled[i]); // segment this tick
+            dir.set(settledPrev[i + 1]).sub(settledPrev[i]); // segment last tick, anchor-local
+            dirCurr.set(settled[i + 1]).sub(settled[i]); // segment this tick, anchor-local
 
             float lenPrev = dir.length();
             float lenCurr = dirCurr.length();
@@ -174,10 +192,7 @@ final class ChainSolver
                 continue;
             }
 
-            /* Carry the chain by the anchor's leftover sub-tick rotation. The lag of the tip during a
-             * turn is produced by the simulation now, so the render carries every segment equally
-             * instead of faking the trail with a per-segment falloff. */
-            swing.transform(dir);
+            liveAnchorRotation.transform(dir);
             render[i + 1].set(render[i]).add(dir.mul(len));
         }
 
@@ -197,7 +212,19 @@ final class ChainSolver
         }
     }
 
-    static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
+    /** Snapshots the chain shape into the given anchor frame — the form the settled shapes are stored in, so the render can plant them on the live anchor. */
+    private static void snapshotLocal(Vector3f[] pos, Vector3f anchor, Quaternionf anchorRotation, Vector3f[] out)
+    {
+        Quaternionf inv = new Quaternionf(anchorRotation).invert();
+
+        for (int i = 0; i < pos.length; i++)
+        {
+            out[i].set(pos[i]).sub(anchor);
+            inv.transform(out[i]);
+        }
+    }
+
+    static void step(World world, int age, float transition, IModel model, List<String> ids, ModelPhysicsCache.CompiledChain chain, float gravityMul, float dampingValue, float stiffnessValue, ModelPhysicsConfig.Wind wind, Map<String, BoneConstraint> constraints, Vector3f anchorPosition, Quaternionf anchorRotation, Quaternionf parentRotation, Vector3f targetPosition, List<PivotFrame> chainFrames, ChainState state)
     {
         Vector3f newAnchor = anchorPosition;
         Quaternionf newAnchorRotation = anchorRotation;
@@ -208,17 +235,10 @@ final class ChainSolver
             return;
         }
 
-        if (state.lastAge == Integer.MIN_VALUE)
-        {
-            seedFromPose(state, chainFrames, lengths, newAnchor, newAnchorRotation);
-            state.lastAge = age;
-            state.renderAlpha = 0F;
-            return;
-        }
+        boolean firstSight = state.lastAge == Integer.MIN_VALUE;
+        int delta = firstSight ? 0 : age - state.lastAge;
 
-        int delta = age - state.lastAge;
-
-        if (delta == 0)
+        if (!firstSight && delta == 0)
         {
             /* Same film tick, a later render within it — no new simulation; the render just interpolates
              * the two latest tick states by the sub-tick transition (and re-roots them to the live anchor). */
@@ -226,19 +246,19 @@ final class ChainSolver
             return;
         }
 
-        if (delta < 0 || delta > MAX_TICK_CATCHUP)
+        /* No history to step from: first sight of the chain, a scrub backwards, or a jump too long to replay
+         * without the intermediate poses (deterministic re-simulation from a window is the runtime's job).
+         * Re-seed at the current animated pose — and then settle below rather than hand that pose to the
+         * render, because the chain cannot hold it. */
+        boolean settle = firstSight || delta < 0 || delta > MAX_TICK_CATCHUP;
+
+        if (settle)
         {
-            /* Scrubbed backwards or jumped a long way: without the intermediate poses the sim can't be
-             * replayed here, so re-seed at the current animated pose. Deterministic re-simulation from a
-             * window is the runtime's job. */
             seedFromPose(state, chainFrames, lengths, newAnchor, newAnchorRotation);
-            state.lastAge = age;
-            state.renderAlpha = clamp01(transition);
-            return;
         }
 
         float gravity = BASE_GRAVITY * gravityMul;
-        float damping = clamp01(dampingValue);
+        float damping = settle ? Math.max(clamp01(dampingValue), SETTLE_DAMPING) : clamp01(dampingValue);
         int iterations = chain.iterations();
         boolean collisions = chain.collisions() && world != null && chain.radius() > 0F;
         float radius = chain.radius();
@@ -249,10 +269,11 @@ final class ChainSolver
          * real-time accumulator — so the chain shape at a tick depends on the tick alone (identical on
          * every playback and in export), not on the render frame rate. A skipped tick (frame hitch)
          * advances several ticks at once, capped. The sub-tick transition interpolates the two latest
-         * tick states in renderInterpolate. */
-        int steps = delta * SUBSTEPS_PER_TICK;
+         * tick states in renderInterpolate. A settling pass is not time passing at all — it stands on one
+         * tick and runs until the chain stops, on its own budget. */
+        int steps = settle ? SETTLE_MAX_SUBSTEPS : delta * SUBSTEPS_PER_TICK;
 
-        if (steps > PHYSICS_MAX_STEPS)
+        if (!settle && steps > PHYSICS_MAX_STEPS)
         {
             steps = PHYSICS_MAX_STEPS;
         }
@@ -278,7 +299,7 @@ final class ChainSolver
         float windMagnitude = PhysicsForces.prepareWind(wind, BASE_GRAVITY, windDir);
         boolean hasWind = windMagnitude > 0F;
         Vector3f windVec = hasWind ? new Vector3f() : null;
-        int startAge = state.lastAge;
+        int startAge = settle ? age : state.lastAge;
 
         /* Per-point spring-back fraction toward the animated pose for one sub-step, falling off toward the
          * floppier tip. Applied as an angular pull in solveSpring, not a positional one. */
@@ -305,16 +326,22 @@ final class ChainSolver
 
         BlockPos.Mutable mutable = collisions ? new BlockPos.Mutable() : null;
 
-        /* Snapshot the previous tick's settled shape once; the new tick's shape is snapshot after the
-         * sub-steps. renderInterpolate blends these two by the sub-tick transition. */
-        copyPositions(state.settled, state.settledPrev);
+        /* Roll the settled snapshots: the previous tick's shape keeps its own anchor frame, the new
+         * tick's shape is snapshot after the sub-steps in its. renderInterpolate blends the two local
+         * shapes by the sub-tick transition. */
+        copyPositions(state.settledLocal, state.settledPrevLocal);
 
         for (int s = 0; s < steps; s++)
         {
             /* Slide the anchor from where the simulation left it toward the live anchor across the
              * sub-steps of this frame, so the chain sees a smooth anchor trajectory. */
             float progress = (s + 1) / (float) steps;
-            float filmTime = startAge + (s + 1) * h;
+
+            /* Settling stands on one tick, so the wind field is held at that tick instead of scrolling: a
+             * moving field has no rest state to converge to, and freezing it is also what the chain is
+             * about to be handed when the sim resumes. The anchor lerp below is likewise a no-op while
+             * settling — seedFromPose already parked the state anchor on the live one. */
+            float filmTime = settle ? age : startAge + (s + 1) * h;
             stepAnchor.set(startAnchor).lerp(newAnchor, progress);
             stepAnchorRotation.set(startAnchorRotation).slerp(newAnchorRotation, progress);
 
@@ -402,16 +429,47 @@ final class ChainSolver
                 lengthForward(state.pos, lengths);
                 pinEnds(state.pos, state.anchor, targetPosition, last);
             }
+
+            /* Settling runs until the chain stops, not for a fixed time: a stiff chain is home in a few
+             * sub-steps and only a loose one needs the whole budget. */
+            if (settle && stopped(state.pos, state.prev))
+            {
+                break;
+            }
         }
 
-        copyPositions(state.pos, state.settled);
+        snapshotLocal(state.pos, state.anchor, state.anchorRotation, state.settledLocal);
+
+        /* A settled chain has no previous tick to blend against — the shape it starts on is the shape it is
+         * in. Leaving the seeded pose in the previous slot would show that pose instead for as long as the
+         * sub-tick transition sits at 0, which it does for every actor in a paused editor. */
+        if (settle)
+        {
+            copyPositions(state.settledLocal, state.settledPrevLocal);
+        }
+
         state.lastAge = age;
+    }
+
+    /** True when no free point moved further than {@link #SETTLE_EPS} across the sub-step that just ran. */
+    private static boolean stopped(Vector3f[] pos, Vector3f[] prev)
+    {
+        for (int i = 1; i < pos.length; i++)
+        {
+            if (pos[i].distanceSquared(prev[i]) > SETTLE_EPS * SETTLE_EPS)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
      * Seeds the chain at the current animated pose with zero velocity: every joint on its posed position
      * plus the virtual tip one rest-length past the last bone. Used on first sight of a chain and when a
-     * scrub or long jump leaves no history to replay.
+     * scrub or long jump leaves no history to replay. This is a starting point, not a result — the pose is
+     * not a shape the sim can hold, so {@link #step} always settles it before anything renders it.
      */
     private static void seedFromPose(ChainState state, List<PivotFrame> chainFrames, float[] lengths, Vector3f anchor, Quaternionf anchorRotation)
     {
@@ -451,8 +509,8 @@ final class ChainSolver
         state.pos[state.pos.length - 1].set(state.pos[chainFrames.size() - 1]).add(tipDir.mul(lengths[lengths.length - 1]));
         state.prev[state.prev.length - 1].set(state.pos[state.pos.length - 1]);
 
-        copyPositions(state.pos, state.settled);
-        copyPositions(state.pos, state.settledPrev);
+        snapshotLocal(state.pos, anchor, anchorRotation, state.settledLocal);
+        copyPositions(state.settledLocal, state.settledPrevLocal);
     }
 
     /** Re-fixes the chain endpoints after a constraint pass: the root onto the anchor and, when the tip is hard-pinned, onto its target. */
@@ -655,7 +713,7 @@ final class ChainSolver
      * along the clamped direction. Only enabled constraints clamp; every bone still advances the parent
      * frame so the next bone is measured in the right space.
      */
-    private static void applyAngleConstraints(PhysicsRig rig, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, ModelConstraintsConfig.BoneConstraint> constraints, Quaternionf rootParentRotation)
+    private static void applyAngleConstraints(PhysicsRig rig, List<String> ids, Vector3f[] pos, float[] lengths, Map<String, BoneConstraint> constraints, Quaternionf rootParentRotation)
     {
         int boneCount = ids.size();
 
@@ -670,7 +728,7 @@ final class ChainSolver
         {
             String boneId = ids.get(i);
             String childId = i + 1 < boneCount ? ids.get(i + 1) : null;
-            ModelConstraintsConfig.BoneConstraint c = boneId == null ? null : constraints.get(boneId);
+            BoneConstraint c = boneId == null ? null : constraints.get(boneId);
 
             Vector3f restDirLocal = rig.restDirectionLocal(boneId, childId);
 
@@ -703,16 +761,16 @@ final class ChainSolver
             Quaternionf localRot = Matrices.fromToMirroredX(restDirLocal, desiredDirLocal);
             Quaternionf applied = localRot;
 
-            if (c != null && c.enabled())
+            if (c != null && c.isActive())
             {
                 Vector3f eulerDeg = Matrices.toEulerZYXDegrees(localRot);
 
-                float minX = c.minX();
-                float minY = c.minY();
-                float minZ = c.minZ();
-                float maxX = c.maxX();
-                float maxY = c.maxY();
-                float maxZ = c.maxZ();
+                float minX = c.minX;
+                float minY = c.minY;
+                float minZ = c.minZ;
+                float maxX = c.maxX;
+                float maxY = c.maxY;
+                float maxZ = c.maxZ;
 
                 if (minX > maxX)
                 {
@@ -735,9 +793,11 @@ final class ChainSolver
                     maxZ = t;
                 }
 
-                eulerDeg.x = eulerDeg.x < minX ? minX : Math.min(eulerDeg.x, maxX);
-                eulerDeg.y = eulerDeg.y < minY ? minY : Math.min(eulerDeg.y, maxY);
-                eulerDeg.z = eulerDeg.z < minZ ? minZ : Math.min(eulerDeg.z, maxZ);
+                /* An axis whose switch is off stays free — the same rule the
+                 * constraint stack's own clamp follows. */
+                eulerDeg.x = c.limitX ? clampAngleArc(eulerDeg.x, minX, maxX) : eulerDeg.x;
+                eulerDeg.y = c.limitY ? clampAngleArc(eulerDeg.y, minY, maxY) : eulerDeg.y;
+                eulerDeg.z = c.limitZ ? clampAngleArc(eulerDeg.z, minZ, maxZ) : eulerDeg.z;
 
                 applied = Matrices.toQuaternionZYXDegrees(eulerDeg.x, eulerDeg.y, eulerDeg.z);
                 Vector3f dirLocal = new Vector3f(restDirLocal);
@@ -755,6 +815,30 @@ final class ChainSolver
         }
     }
 
+    /**
+     * Clamps an euler channel to the [min, max] arc of the angle circle. The euler decomposition hands
+     * out angles in (-180, 180], so a bone swinging past the vertical wraps from +179 to -179; a plain
+     * numeric clamp reads that as "below min" and teleports the bone across the whole allowed range.
+     * Treating the limits as an arc and snapping to the nearest edge by circular distance keeps the
+     * clamp continuous through the wrap — inside the range both clamps agree.
+     */
+    private static float clampAngleArc(float angle, float min, float max)
+    {
+        if (angle >= min && angle <= max)
+        {
+            return angle;
+        }
+
+        return circularDistance(angle, min) <= circularDistance(angle, max) ? min : max;
+    }
+
+    private static float circularDistance(float a, float b)
+    {
+        float d = Math.abs(a - b) % 360F;
+
+        return d > 180F ? 360F - d : d;
+    }
+
     private static float clamp01(float v)
     {
         if (v < 0F)
@@ -763,5 +847,13 @@ final class ChainSolver
         }
 
         return v > 1F ? 1F : v;
+    }
+
+    /** The chain tip's rest direction, asked of whichever rig this model is. */
+    private static Vector3f tipRestDirection(IModel model, List<String> ids)
+    {
+        PhysicsRig rig = PhysicsRig.of(model);
+
+        return rig == null ? null : rig.tipRestDirectionLocal(ids);
     }
 }

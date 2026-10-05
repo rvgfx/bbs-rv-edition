@@ -24,7 +24,7 @@ public class UINestedEdit extends UIElement
         this.edit.relative(this).h(1F);
         this.pick.relative(this).h(1F);
 
-        this.h(UIConstants.CONTROL_HEIGHT).row(0);
+        this.h(UIConstants.CONTROL_HEIGHT).row(UIConstants.MARGIN);
         this.add(this.pick, this.edit);
     }
 
@@ -32,14 +32,6 @@ public class UINestedEdit extends UIElement
     {
         this.keys().register(Keys.FORMS_PICK, () -> this.pick.clickItself());
         this.keys().register(Keys.FORMS_EDIT, () -> this.edit.clickItself());
-
-        return this;
-    }
-
-    public UINestedEdit alternativeKeybinds()
-    {
-        this.keys().register(Keys.FORMS_PICK_ALT, () -> this.pick.clickItself());
-        this.keys().register(Keys.FORMS_EDIT_ALT, () -> this.edit.clickItself());
 
         return this;
     }

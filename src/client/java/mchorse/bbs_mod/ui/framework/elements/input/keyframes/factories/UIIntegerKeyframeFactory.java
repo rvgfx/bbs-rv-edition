@@ -9,7 +9,6 @@ import mchorse.bbs_mod.settings.values.base.BaseValue;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.input.UITrackpad;
-import mchorse.bbs_mod.ui.framework.elements.input.keyframes.TrackpadRecorder;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframeSheet;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.UIKeyframes;
 import mchorse.bbs_mod.ui.framework.elements.input.keyframes.factories.utils.UIBezierHandles;
@@ -181,14 +180,8 @@ public class UIIntegerKeyframeFactory extends UINumericKeyframeFactory<Integer>
     }
 
     @Override
-    protected void setKeyframeValue(double value)
+    protected void setKeyframeValue(Keyframe<Integer> keyframe, double value)
     {
-        this.keyframe.setValue((int) value);
-    }
-
-    @Override
-    protected TrackpadRecorder.ValueConverter createValueConverter()
-    {
-        return (value) -> (int) value;
+        keyframe.setValue((int) value);
     }
 }

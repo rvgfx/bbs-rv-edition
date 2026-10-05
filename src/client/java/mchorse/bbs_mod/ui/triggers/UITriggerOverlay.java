@@ -57,7 +57,6 @@ public class UITriggerOverlay extends UIEditorOverlayPanel<Trigger> {
         this.list.add(trigger.getAllTyped());
         this.pickItem(trigger.getAllTyped().isEmpty() ? null : trigger.getAllTyped().get(0), true);
 
-        this.list.resetContext();
         this.list.context((menu) ->
         {
             menu.action(Icons.ADD, this.getAddLabel(), this::addItem);

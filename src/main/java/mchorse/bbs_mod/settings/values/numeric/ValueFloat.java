@@ -19,6 +19,22 @@ public class ValueFloat extends BaseValueNumber<Float>
     }
 
     @Override
+    public ValueFloat slider()
+    {
+        super.slider();
+
+        return this;
+    }
+
+    @Override
+    public ValueFloat slider(double step)
+    {
+        super.slider(step);
+
+        return this;
+    }
+
+    @Override
     protected Float clamp(Float value)
     {
         return MathUtils.clamp(value, this.min, this.max);
@@ -43,5 +59,11 @@ public class ValueFloat extends BaseValueNumber<Float>
     public String toString()
     {
         return Float.toString(this.value);
+    }
+
+    @Override
+    public void setNumber(double value)
+    {
+        this.set((float) value);
     }
 }

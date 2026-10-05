@@ -4,8 +4,12 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import mchorse.bbs_mod.BBSModClient;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.BBSShaders;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.forms.BillboardForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
+import mchorse.bbs_mod.forms.renderers.utils.FormOverlay;
+import mchorse.bbs_mod.forms.renderers.utils.FramebufferDebug;
+import mchorse.bbs_mod.utils.colors.OverlayBlend;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.ui.framework.UIContext;
@@ -17,6 +21,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.ShaderProgram;
+import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.GameRenderer;
@@ -31,17 +36,18 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import org.lwjgl.opengl.GL13;
 
 import java.util.function.Supplier;
 
-public class BillboardFormRenderer extends FormRenderer<BillboardForm>
+public class BillboardFormRenderer <T extends BillboardForm> extends FormRenderer<T>
 {
     private static final Quad quad = new Quad();
     private static final Quad uvQuad = new Quad();
 
     private static final Matrix4f matrix = new Matrix4f();
 
-    public BillboardFormRenderer(BillboardForm form)
+    public BillboardFormRenderer(T form)
     {
         super(form);
     }
@@ -66,7 +72,7 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         this.renderModel(format, GameRenderer::getRenderTypeEntityTranslucentProgram,
             stack,
             OverlayTexture.DEFAULT_UV, LightmapTextureManager.MAX_LIGHT_COORDINATE, Colors.WHITE,
-            context.getTransition()
+            context.getTransition(), false
         );
 
         stack.pop();
@@ -88,19 +94,28 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             shading ? BBSShaders::getPickerBillboardProgram : BBSShaders::getPickerBillboardNoShadingProgram
         );
 
-        this.renderModel(format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition());
+        this.renderModel(format, shader, context.stack, context.overlay, context.light, context.color, context.getTransition(), !context.isPicking());
     }
 
-    private void renderModel(VertexFormat format, Supplier<ShaderProgram> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
+    /**
+     * The texture the quad wears. The video form's renderer swaps this for a
+     * decoded video frame; everything else about the quad stays shared.
+     */
+    protected Texture getTexture()
     {
         Link t = this.form.texture.get();
 
-        if (t == null)
+        return t == null ? null : BBSModClient.getTextures().getTexture(t);
+    }
+
+    private void renderModel(VertexFormat format, Supplier<ShaderProgram> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition, boolean defer)
+    {
+        Texture texture = this.getTexture();
+
+        if (texture == null)
         {
             return;
         }
-
-        Texture texture = BBSModClient.getTextures().getTexture(t);
 
         float w = texture.width;
         float h = texture.height;
@@ -164,17 +179,17 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
             uvQuad.transform(matrix);
         }
 
-        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition);
+        this.renderQuad(format, texture, shader, matrices, overlay, light, overlayColor, transition, defer);
     }
 
-    private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderProgram> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition)
+    private void renderQuad(VertexFormat format, Texture texture, Supplier<ShaderProgram> shader, MatrixStack matrices, int overlay, int light, int overlayColor, float transition, boolean defer)
     {
         BufferBuilder builder = Tessellator.getInstance().getBuffer();
         Color color = new Color().set(overlayColor, true);
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         Matrix3f normal = matrices.peek().getNormalMatrix();
 
-        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(color, this.form.color.get());
 
         if (this.form.billboard.get())
         {
@@ -197,12 +212,42 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
         gameRenderer.getLightmapTextureManager().enable();
         gameRenderer.getOverlayTexture().setupOverlayColor();
 
+        /* The color overlay rides the overlay-texture channel, so it needs the shaded format
+         * (the no-shading format has no overlay UV) and steps aside for a hurt flash. Picker
+         * programs don't sample unit 1, so this is inert while picking. */
+        Color formOverlay = this.form.overlayColor.get();
+        boolean overlayActive = format == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL
+            && overlay == OverlayTexture.DEFAULT_UV
+            && OverlayBlend.isActive(formOverlay);
+        int previousOverlayTexture = overlayActive ? FormOverlay.bind(formOverlay) : 0;
+
+        if (overlayActive)
+        {
+            overlay = 0;
+        }
+
         ShaderProgram finalShader = shader.get();
 
         BBSModClient.getTextures().bindTexture(texture);
         RenderSystem.setShader(() -> finalShader);
 
-        texture.bind();
+        if (FramebufferDebug.inside())
+        {
+            FramebufferDebug.log("billboard", "shader=" + FramebufferDebug.shader(finalShader)
+                + " shaded=" + (format == VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL)
+                + " texture=" + texture.id + "/translucent=" + texture.hasTranslucency() + " alpha=" + color.a
+                + " light=" + light + " overlayActive=" + overlayActive + " defer=" + defer
+                + " | " + FramebufferDebug.bindings());
+        }
+
+        /* Filter parameters go to whichever texture is bound on the ACTIVE unit, and nothing
+         * promises that unit is 0 here: under a shader pack it is whatever unit Iris touched
+         * last (unit 2 in practice). A raw bind there put this texture over the lightmap's slot
+         * behind GlStateManager's back - its cache still said the lightmap was bound, so the
+         * draw never rebound it, and the quad was lit by a texel of its own skin. Going through
+         * RenderSystem keeps the real binding and the cache in step, on unit 0, on purpose. */
+        RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+        RenderSystem.bindTexture(texture.id);
         texture.setFilterMipmap(this.form.linear.get(), this.form.mipmap.get());
         builder.begin(VertexFormat.DrawMode.TRIANGLES, format);
 
@@ -226,9 +271,64 @@ public class BillboardFormRenderer extends FormRenderer<BillboardForm>
 
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableBlend();
-        BufferRenderer.drawWithGlobalProgram(builder.end());
 
+        boolean linear = this.form.linear.get();
+        boolean mipmap = this.form.mipmap.get();
+        boolean translucent = texture.hasTranslucency() || color.a < 1F || linear || mipmap;
+
+        if (defer && translucent && FormTranslucentQueue.isActive())
+        {
+            /* The whole quad defers to the end-of-frame translucent pass: depth testing still
+             * hides it behind opaque geometry, while the far-to-near sort blends it correctly
+             * against other translucent forms — and it never occludes models behind it.
+             * Linear/mipmap sampling manufactures fractional alpha at the edges even from a
+             * binary-alpha texture, hence those flags count as translucency. */
+            VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+
+            buffer.bind();
+            buffer.upload(builder.end());
+            VertexBuffer.unbind();
+
+            Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
+            Vector3f origin = modelView.transformPosition(matrix.getTranslation(new Vector3f()));
+            Vector3f planeNormal = FormTranslucentQueue.quadPlaneNormal(modelView, matrix);
+
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(
+                buffer, () -> finalShader, texture, modelView, null, origin, planeNormal, true,
+                () ->
+                {
+                    RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+                    RenderSystem.bindTexture(texture.id);
+                    texture.setFilterMipmap(linear, mipmap);
+                },
+                () ->
+                {
+                    RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+                    RenderSystem.bindTexture(texture.id);
+                    texture.setFilterMipmap(false, false);
+                }
+            ).overlayColor(overlayActive ? formOverlay : null));
+        }
+        else
+        {
+            BufferRenderer.drawWithGlobalProgram(builder.end());
+        }
+
+        if (FramebufferDebug.inside())
+        {
+            FramebufferDebug.log("billboard", "after draw | " + FramebufferDebug.bindings());
+            FramebufferDebug.log("billboard", "after draw | " + FramebufferDebug.glState());
+            FramebufferDebug.log("billboard", "after draw | " + FramebufferDebug.samplers());
+        }
+
+        RenderSystem.activeTexture(GL13.GL_TEXTURE0);
+        RenderSystem.bindTexture(texture.id);
         texture.setFilterMipmap(false, false);
+
+        if (overlayActive)
+        {
+            FormOverlay.unbind(previousOverlayTexture);
+        }
 
         gameRenderer.getLightmapTextureManager().disable();
         gameRenderer.getOverlayTexture().teardownOverlayColor();

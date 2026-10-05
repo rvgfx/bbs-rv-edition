@@ -19,6 +19,22 @@ public class ValueDouble extends BaseValueNumber<Double>
     }
 
     @Override
+    public ValueDouble slider()
+    {
+        super.slider();
+
+        return this;
+    }
+
+    @Override
+    public ValueDouble slider(double step)
+    {
+        super.slider(step);
+
+        return this;
+    }
+
+    @Override
     protected Double clamp(Double value)
     {
         return MathUtils.clamp(value, this.min, this.max);
@@ -43,5 +59,11 @@ public class ValueDouble extends BaseValueNumber<Double>
     public String toString()
     {
         return Double.toString(this.value);
+    }
+
+    @Override
+    public void setNumber(double value)
+    {
+        this.set(value);
     }
 }

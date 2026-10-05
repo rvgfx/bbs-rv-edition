@@ -1,19 +1,26 @@
 package mchorse.bbs_mod.forms.renderers;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.fonts.FontManager;
+import mchorse.bbs_mod.resources.Link;
 import mchorse.bbs_mod.client.BBSShaders;
 import mchorse.bbs_mod.forms.CustomVertexConsumerProvider;
+import mchorse.bbs_mod.forms.FormTranslucentQueue;
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.LabelForm;
 import mchorse.bbs_mod.forms.renderers.utils.FormColorBlend;
 import mchorse.bbs_mod.ui.framework.UIContext;
+import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.framework.elements.utils.FontRenderer;
 import mchorse.bbs_mod.utils.MatrixStackUtils;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.colors.OverlayBlend;
 import mchorse.bbs_mod.utils.joml.Vectors;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
+import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.BufferRenderer;
 import net.minecraft.client.render.GameRenderer;
@@ -46,23 +53,53 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         super(form);
     }
 
+    /**
+     * The label's own font, or the default one when it doesn't have (or can't load) one.
+     * The scale says how many screen pixels a unit of the layout covers where it's about
+     * to be drawn - see {@link FontManager#get(Link, int, float)}.
+     */
+    private FontRenderer getFont(float scale)
+    {
+        FontRenderer font = BBSModClient.getFonts().get(this.form.font.get(), this.form.fontSize.get(), scale);
+
+        return font == null ? Batcher2D.getDefaultTextRenderer() : font;
+    }
+
+    private int getLineHeight(FontRenderer font)
+    {
+        int lineHeight = this.form.lineHeight.get();
+
+        return lineHeight > 0 ? lineHeight : font.getLineHeight();
+    }
+
     @Override
     public void renderInUI(UIContext context, int x1, int y1, int x2, int y2)
     {
         int color = this.form.color.get().getARGBColor();
         String text = StringUtils.processColoredText(this.form.text.get());
-        List<String> wrap = context.batcher.getFont().wrap(text, x2 - x1 - 4);
+        /* The interface draws a unit of the layout over as many pixels as it is scaled by. */
+        FontRenderer font = this.getFont((float) MinecraftClient.getInstance().getWindow().getScaleFactor());
+        FontRenderer previous = context.batcher.setFont(font);
 
-        int th = context.batcher.getFont().getHeight();
-        int lineHeight = th + 4;
-        int h = th + (wrap.size() - 1) * lineHeight;
-        int y = (y2 + y1) / 2 - h / 2;
-
-        for (String s : wrap)
+        try
         {
-            context.batcher.textShadow(s, x1 + 2, y, color);
+            List<String> wrap = font.wrap(text, x2 - x1 - 4);
 
-            y += lineHeight;
+            int th = font.getHeight();
+            int lineHeight = th + 4;
+            int h = th + (wrap.size() - 1) * lineHeight;
+            int y = (y2 + y1) / 2 - h / 2;
+
+            for (String s : wrap)
+            {
+                context.batcher.textShadow(s, x1 + 2, y, color);
+
+                y += lineHeight;
+            }
+        }
+        finally
+        {
+            context.batcher.setFont(previous);
         }
     }
 
@@ -87,7 +124,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             context.stack.peek().getNormalMatrix().identity();
         }
 
-        TextRenderer renderer = MinecraftClient.getInstance().textRenderer;
+        FontRenderer font = this.getFont(FontManager.MAX_DETAIL);
         CustomVertexConsumerProvider consumers = FormUtilsClient.getProvider();
         float scale = 1F / 16F;
         int light = context.light;
@@ -107,13 +144,30 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
             light = 0;
         }
 
+        /* The whole label (text + background) records as ONE deferred group: its parts rely on
+         * each other's depth (glyphs over the background quad), so they replay together in
+         * original order, while the group as a whole sorts against other translucent forms. */
+        boolean grouped = !context.isPicking() && FormTranslucentQueue.isActive();
+
+        if (grouped)
+        {
+            Vector3f origin = context.stack.peek().getPositionMatrix().getTranslation(new Vector3f());
+
+            FormTranslucentQueue.beginGroup(new Matrix4f(RenderSystem.getModelViewMatrix()).transformPosition(origin), false);
+        }
+
         if (this.form.max.get() <= 10)
         {
-            this.renderString(context, consumers, renderer, light);
+            this.renderString(context, consumers, font, light);
         }
         else
         {
-            this.renderLimitedString(context, consumers, renderer, light);
+            this.renderLimitedString(context, consumers, font, light);
+        }
+
+        if (grouped)
+        {
+            FormTranslucentQueue.endGroup();
         }
 
         CustomVertexConsumerProvider.clearRunnables();
@@ -124,19 +178,22 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         context.stack.pop();
     }
 
-    private void renderString(FormRenderingContext context, CustomVertexConsumerProvider consumers, TextRenderer renderer, int light)
+    private void renderString(FormRenderingContext context, CustomVertexConsumerProvider consumers, FontRenderer font, int light)
     {
+        TextRenderer renderer = font.getRenderer();
         String content = StringUtils.processColoredText(this.form.text.get());
         float transition = context.getTransition();
         int w = renderer.getWidth(content) - 1;
-        int h = renderer.fontHeight - 2;
+        int h = font.getHeight();
         int x = (int) (-w * this.form.anchorX.get());
         int y = (int) (-h * this.form.anchorY.get());
 
         Color shadowColor = this.form.shadowColor.get().copy();
         Color color = new Color().set(context.color, true);
 
-        FormColorBlend.blend(color, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(color, this.form.color.get());
+        /* Text is a flat fill, so the CPU mix is exactly what the overlay texture would do. */
+        OverlayBlend.apply(color, this.form.overlayColor.get());
         shadowColor.mul(context.color);
 
         if (shadowColor.a > 0)
@@ -176,17 +233,19 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         this.renderShadow(context, x, y, w, h);
     }
 
-    private void renderLimitedString(FormRenderingContext context, CustomVertexConsumerProvider consumers, TextRenderer renderer, int light)
+    private void renderLimitedString(FormRenderingContext context, CustomVertexConsumerProvider consumers, FontRenderer font, int light)
     {
+        TextRenderer renderer = font.getRenderer();
+        int lineHeight = this.getLineHeight(font);
         float transition = context.getTransition();
         int w = 0;
-        int h = renderer.fontHeight - 2;
+        int h = font.getHeight();
         String content = StringUtils.processColoredText(this.form.text.get());
         List<String> lines = FontRenderer.wrap(renderer, content, this.form.max.get());
 
         if (lines.size() <= 1)
         {
-            this.renderString(context, consumers, renderer, light);
+            this.renderString(context, consumers, font, light);
 
             return;
         }
@@ -199,10 +258,10 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         for (String line : lines)
         {
             w = Math.max(renderer.getWidth(line) - 1, w);
-            h += 12;
+            h += lineHeight;
         }
 
-        h -= 12;
+        h -= lineHeight;
 
         int x = (int) (-w * this.form.anchorX.get());
         int y = (int) (-h * this.form.anchorY.get());
@@ -233,7 +292,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
                     light
                 );
 
-                y2 += 12;
+                y2 += lineHeight;
             }
 
             context.stack.pop();
@@ -243,7 +302,8 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
 
         Color cColor = new Color().set(context.color, true);
 
-        FormColorBlend.blend(cColor, this.form.color.get(), this.form.additiveColor.get());
+        FormColorBlend.blend(cColor, this.form.color.get());
+        OverlayBlend.apply(cColor, this.form.overlayColor.get());
 
         int color = cColor.getARGBColor();
 
@@ -263,7 +323,7 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
                 light
             );
 
-            y2 += 12;
+            y2 += lineHeight;
         }
 
         consumers.draw();
@@ -304,7 +364,26 @@ public class LabelFormRenderer extends FormRenderer<LabelForm>
         RenderSystem.enableBlend();
         RenderSystem.enableDepthTest();
         RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-        BufferRenderer.drawWithGlobalProgram(builder.end());
+
+        if (FormTranslucentQueue.isGroupOpen())
+        {
+            VertexBuffer buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
+
+            buffer.bind();
+            buffer.upload(builder.end());
+            VertexBuffer.unbind();
+
+            FormTranslucentQueue.add(new FormTranslucentQueue.VertexBufferCommand(
+                buffer, GameRenderer::getPositionColorProgram, null,
+                new Matrix4f(RenderSystem.getModelViewMatrix()),
+                null, new Vector3f(FormTranslucentQueue.getSortOrigin()), null, false, null, null
+            ));
+        }
+        else
+        {
+            BufferRenderer.drawWithGlobalProgram(builder.end());
+        }
+
         context.stack.pop();
     }
 }

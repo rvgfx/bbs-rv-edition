@@ -1,5 +1,7 @@
 package mchorse.bbs_mod.ui.forms.editors.utils;
 
+import mchorse.bbs_mod.api.client.events.FormPreviewEvents;
+
 import mchorse.bbs_mod.forms.FormUtilsClient;
 import mchorse.bbs_mod.forms.forms.Form;
 import mchorse.bbs_mod.forms.renderers.FormRenderType;
@@ -14,6 +16,12 @@ public class UIFormRenderer extends UIModelRenderer
     public Form form;
 
     @Override
+    protected void renderUserModelOverlay(UIContext context)
+    {
+        FormPreviewEvents.OVERLAY.invoker().render(this, context);
+    }
+
+    @Override
     protected void renderUserModel(UIContext context)
     {
         if (this.form == null)
@@ -24,7 +32,7 @@ public class UIFormRenderer extends UIModelRenderer
         FormRenderingContext formContext = new FormRenderingContext()
             .set(FormRenderType.PREVIEW, this.entity, context.batcher.getContext().getMatrices(), LightmapTextureManager.pack(15, 15), OverlayTexture.DEFAULT_UV, context.getTransition())
             .camera(this.camera)
-            .modelRenderer();
+            .modelRenderer(context.getTick());
 
         FormUtilsClient.render(this.form, formContext);
     }

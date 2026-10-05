@@ -1,6 +1,8 @@
 package mchorse.bbs_mod.client.renderer.entity;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import mchorse.bbs_mod.BBSModClient;
+import mchorse.bbs_mod.client.renderer.DeathPose;
 import mchorse.bbs_mod.cubic.render.vanilla.ArmorRenderer;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.forms.FormUtilsClient;
@@ -30,10 +32,13 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
         armorRenderer = new ArmorRenderer(
             new ArmorEntityModel(ctx.getPart(EntityModelLayers.PLAYER_INNER_ARMOR)),
             new ArmorEntityModel(ctx.getPart(EntityModelLayers.PLAYER_OUTER_ARMOR)),
+            ctx.getPart(EntityModelLayers.ELYTRA),
             ctx.getModelManager()
         );
 
-        this.shadowRadius = 0.5F;
+        /* The film draws an actor's shadow itself, sized and offset by the replay. A vanilla shadow
+         * underneath would be a second one, at a fixed size nobody asked for. */
+        this.shadowRadius = 0F;
     }
 
     @Override
@@ -45,6 +50,14 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
     @Override
     public void render(ActorEntity livingEntity, float yaw, float tickDelta, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light)
     {
+        /* A film running on this client draws its own actors, from their keyframes - drawing them
+         * here as well would be a second body, a frame behind the first. This is for everyone else:
+         * a player who happens to be standing in someone else's scene still sees the cast. */
+        if (BBSModClient.getFilms().isActorDrawn(livingEntity.getId()))
+        {
+            return;
+        }
+
         matrices.push();
 
         float bodyYaw = MathHelper.lerpAngleDegrees(tickDelta, livingEntity.prevBodyYaw, livingEntity.bodyYaw);
@@ -77,11 +90,6 @@ public class ActorEntityRenderer extends EntityRenderer<ActorEntity>
             matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-bodyYaw));
         }
 
-        if (entity.deathTime > 0)
-        {
-            float deathAngle = (entity.deathTime + tickDelta - 1F) / 20F * 1.6F;
-
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(Math.min(MathHelper.sqrt(deathAngle), 1F) * 90F));
-        }
+        DeathPose.apply(matrices, entity.deathTime, tickDelta);
     }
 }

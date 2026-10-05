@@ -5,23 +5,30 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.replays.Replay;
+import mchorse.bbs_mod.film.replays.ReplayKeyframes;
 import mchorse.bbs_mod.forms.FormUtils;
+import mchorse.bbs_mod.forms.entities.EntityState;
+import mchorse.bbs_mod.forms.entities.IEntity;
+import mchorse.bbs_mod.forms.entities.MCEntity;
 import mchorse.bbs_mod.forms.forms.Form;
+import mchorse.bbs_mod.mixin.EntityInvoker;
+import mchorse.bbs_mod.mixin.LivingEntityRollAccessor;
 import mchorse.bbs_mod.morphing.Morph;
 import mchorse.bbs_mod.network.ServerNetwork;
 import mchorse.bbs_mod.settings.values.base.BaseValue;
-import mchorse.bbs_mod.utils.CollectionUtils;
 import mchorse.bbs_mod.utils.DataPath;
-import mchorse.bbs_mod.utils.MathUtils;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.MovementType;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +43,6 @@ public class ActionPlayer
     public PlayerType type;
 
     public boolean syncing;
-    public boolean stopDamage = true;
     private boolean pendingResync;
 
     private ServerPlayerEntity serverPlayer;
@@ -45,8 +51,18 @@ public class ActionPlayer
 
     private Map<String, LivingEntity> actors = new HashMap<>();
 
-    private List<ItemStack> cachedInventory = new ArrayList<>();
     private Form cachedForm;
+
+    /**
+     * The film dresses the first person player for the duration of the playback, so what it
+     * takes over has to be given back. It borrows exactly what it drives - the hotbar, the
+     * armour and the off hand - and never the rest of the inventory, which no camera can see.
+     */
+    private boolean borrowedEquipment;
+    private List<ItemStack> cachedHotbar = new ArrayList<>();
+    private Map<EquipmentSlot, ItemStack> cachedEquipment = new EnumMap<>(EquipmentSlot.class);
+    private int cacheSelectedSlot;
+    private IEntity fpEntity;
 
     private float cacheHp;
     private int cacheHunger;
@@ -63,7 +79,7 @@ public class ActionPlayer
         this.type = type;
 
         this.serverPlayer = serverPlayer;
-        this.duration = film.camera.calculateDuration();
+        this.duration = film.calculateDuration();
 
         this.updateReplayEntities();
 
@@ -71,11 +87,7 @@ public class ActionPlayer
 
         if (this.type == PlayerType.NORMAL && this.serverPlayer != null && fpReplay != null)
         {
-            for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
-            {
-                this.cachedInventory.add(serverPlayer.getInventory().getStack(i).copy());
-                this.serverPlayer.getInventory().setStack(i, CollectionUtils.getSafe(this.film.inventory.getStacks(), i, ItemStack.EMPTY));
-            }
+            this.borrowEquipment(fpReplay.keyframes);
 
             Morph morph = Morph.getMorph(this.serverPlayer);
 
@@ -95,6 +107,61 @@ public class ActionPlayer
         }
     }
 
+    /** Equipment slots the film drives directly; the hotbar is driven by slot index instead. */
+    private static final EquipmentSlot[] BORROWED_SLOTS = {EquipmentSlot.OFFHAND, EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    private void borrowEquipment(ReplayKeyframes keyframes)
+    {
+        PlayerInventory inventory = this.serverPlayer.getInventory();
+
+        this.borrowedEquipment = true;
+        this.cacheSelectedSlot = inventory.selectedSlot;
+        this.fpEntity = new MCEntity(this.serverPlayer);
+
+        for (int i = 0; i < ReplayKeyframes.HOTBAR_SIZE; i++)
+        {
+            this.cachedHotbar.add(inventory.getStack(i).copy());
+
+            /* Cells the replay says nothing about are left to the world during playback (see
+             * ReplayKeyframes#applyEquipment), but they're still emptied once - otherwise the
+             * player's own things would wander into frame. */
+            if (!keyframes.drivesHotbarSlot(i))
+            {
+                inventory.setStack(i, ItemStack.EMPTY);
+            }
+        }
+
+        for (EquipmentSlot slot : BORROWED_SLOTS)
+        {
+            this.cachedEquipment.put(slot, this.serverPlayer.getEquippedStack(slot).copy());
+
+            if (keyframes.getEquipmentChannel(slot).isEmpty())
+            {
+                this.serverPlayer.equipStack(slot, ItemStack.EMPTY);
+            }
+        }
+    }
+
+    private void returnEquipment()
+    {
+        PlayerInventory inventory = this.serverPlayer.getInventory();
+
+        /* Playback can be stopped more than once (the film ends, then the manager stops it) */
+        this.borrowedEquipment = false;
+
+        for (int i = 0; i < this.cachedHotbar.size(); i++)
+        {
+            inventory.setStack(i, this.cachedHotbar.get(i));
+        }
+
+        for (Map.Entry<EquipmentSlot, ItemStack> entry : this.cachedEquipment.entrySet())
+        {
+            this.serverPlayer.equipStack(entry.getKey(), entry.getValue());
+        }
+
+        ServerNetwork.sendSelectedSlot(this.serverPlayer, this.cacheSelectedSlot);
+    }
+
     public static void applyFilmPlayerSettingsTo(ServerPlayerEntity player, float hp, float hunger, int xpLevel, float xpProgress)
     {
         player.setHealth(hp);
@@ -103,15 +170,15 @@ public class ActionPlayer
         player.experienceProgress = xpProgress;
     }
 
+    /**
+     * Reconcile the bodies in the world with the replays that ask for one. Whoever is still wanted
+     * and still alive is left standing: this runs on every structural edit of the film, and razing
+     * the whole cast each time handed every actor a new entity id - clients kept pointing at ids
+     * that had just been discarded, and the bodies blinked out of the scene for a tick or two.
+     */
     public void updateReplayEntities()
     {
-        for (LivingEntity entity : this.actors.values())
-        {
-            if (!entity.isPlayer())
-            {
-                entity.discard();
-            }
-        }
+        Map<String, LivingEntity> previous = new HashMap<>(this.actors);
 
         this.actors.clear();
 
@@ -136,20 +203,114 @@ public class ActionPlayer
             }
             else
             {
-                ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.world);
+                LivingEntity kept = previous.remove(replay.getId());
 
-                actor.setForm(FormUtils.copy(replay.form.get()));
-
-                this.apply(actor, replay, this.tick, false);
-                this.actors.put(replay.getId(), actor);
-                this.world.spawnEntity(actor);
+                /* Kept only when it is still an actor's body: a replay that just stopped being
+                 * first person leaves the player behind under the same key, and the player is
+                 * nobody's to keep driving as a puppet. */
+                if (kept instanceof ActorEntity actor && !actor.isRemoved())
+                {
+                    this.actors.put(replay.getId(), actor);
+                }
+                else
+                {
+                    this.actors.put(replay.getId(), this.spawnActor(replay));
+                }
             }
         }
 
+        for (LivingEntity entity : previous.values())
+        {
+            if (!entity.isPlayer())
+            {
+                if (entity instanceof ActorEntity actor)
+                {
+                    actor.dropPickedUp();
+                }
+
+                entity.discard();
+            }
+        }
+
+        this.broadcastActors();
+    }
+
+    private ActorEntity spawnActor(Replay replay)
+    {
+        ActorEntity actor = new ActorEntity(BBSMod.ACTOR_ENTITY, this.world);
+
+        actor.setReplay(this.film.getId(), replay.getId());
+        actor.setPickUpItems(replay.actorPickup.get());
+        actor.setForm(FormUtils.copy(replay.form.get()));
+
+        this.apply(actor, replay, this.tick, false);
+        this.world.spawnEntity(actor);
+
+        return actor;
+    }
+
+    private void broadcastActors()
+    {
         for (ServerPlayerEntity player : this.world.getPlayers())
         {
             ServerNetwork.sendActors(player, this.film.getId(), this.actors);
         }
+    }
+
+    /**
+     * Actors are props the film puts out, not creatures the world keeps, and the world may take one
+     * away at any moment: a chunk that unloaded and came back drops its actor on the despawn flag.
+     * The film would then keep driving a corpse - the take simply loses a body and never gets it
+     * back. Anything missing is put back where its keyframes say it stands, and the map goes out
+     * again so clients stop pointing at a dead id.
+     *
+     * <p>A body someone KILLED is the exception, and the reason the removal is asked for by name:
+     * being hit is what the flag is for, and a death is a thing being filmed, not an accident to
+     * undo. Putting it straight back made an actor unkillable by any means - a blow, a mob, even
+     * {@code /kill} - because the next tick spawned a replacement. It stays down until the film is
+     * restarted, which is what builds the cast again.</p>
+     */
+    private void reviveLostActors()
+    {
+        List<String> lost = null;
+
+        for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
+        {
+            LivingEntity actor = entry.getValue();
+
+            if (!actor.isPlayer() && actor.isRemoved())
+            {
+                if (lost == null)
+                {
+                    lost = new ArrayList<>();
+                }
+
+                lost.add(entry.getKey());
+            }
+        }
+
+        if (lost == null)
+        {
+            return;
+        }
+
+        for (String id : lost)
+        {
+            Replay replay = (Replay) this.film.replays.get(id);
+            LivingEntity previous = this.actors.get(id);
+            boolean killed = previous != null && previous.getRemovalReason() == Entity.RemovalReason.KILLED;
+
+            if (killed || replay == null || !replay.enabled.get())
+            {
+                this.actors.remove(id);
+            }
+            else
+            {
+                this.actors.put(id, this.spawnActor(replay));
+            }
+        }
+
+        this.broadcastActors();
     }
 
     public ServerWorld getWorld()
@@ -157,8 +318,41 @@ public class ActionPlayer
         return this.world;
     }
 
+    /**
+     * By uuid rather than by identity: dying and respawning hands the same person a brand new
+     * {@link ServerPlayerEntity}, and a playback compared by reference then belonged to nobody.
+     * It outlived the disconnect that should have ended it, still holding the equipment it had
+     * borrowed - which the player never got back.
+     */
+    public boolean isPlayedBy(ServerPlayerEntity player)
+    {
+        return this.serverPlayer != null && player != null && this.serverPlayer.getUuid().equals(player.getUuid());
+    }
+
+    /** The same person, but the entity they are now - a respawn replaces the object entirely. */
+    private void refreshPlayer()
+    {
+        if (this.serverPlayer == null)
+        {
+            return;
+        }
+
+        ServerPlayerEntity live = this.world.getServer().getPlayerManager().getPlayer(this.serverPlayer.getUuid());
+
+        if (live != null)
+        {
+            this.serverPlayer = live;
+        }
+    }
+
     public void apply(LivingEntity actor, Replay replay, float tick, boolean ticking)
     {
+        /* Replay-local, the way the client already reads it when it draws: a looping replay wraps
+         * the film's tick into its own window. The server never wrapped, so a looping replay's body
+         * stood at the unwrapped tick - off in a part of the take the loop never reaches - while
+         * the drawn one played its loop. */
+        tick = replay.getTick((int) tick);
+
         double x = replay.keyframes.x.interpolate(tick);
         double y = replay.keyframes.y.interpolate(tick);
         double z = replay.keyframes.z.interpolate(tick);
@@ -167,10 +361,15 @@ public class ActionPlayer
         float pitch = replay.keyframes.pitch.interpolate(tick).floatValue();
 
         Vec3d pos = actor.getPos();
+        boolean grounded = replay.keyframes.grounded.interpolate(tick) > 0;
 
         if (ticking)
         {
-            actor.move(MovementType.SELF, new Vec3d(x - pos.x, y - pos.y, z - pos.z));
+            /* Probe downwards so vanilla's collision registers the floor - see
+             * ReplayKeyframes#GRAVITY_PROBE. */
+            double dY = y - pos.y - (grounded ? ReplayKeyframes.GRAVITY_PROBE : 0D);
+
+            actor.move(MovementType.SELF, new Vec3d(x - pos.x, dY, z - pos.z));
         }
 
         actor.setPosition(x, y, z);
@@ -178,29 +377,48 @@ public class ActionPlayer
         actor.setHeadYaw(yawHead);
         actor.setPitch(pitch);
         actor.setBodyYaw(yawBody);
-        actor.setSneaking(replay.keyframes.sneaking.interpolate(tick) > 0);
-        actor.setOnGround(replay.keyframes.grounded.interpolate(tick) > 0);
-        actor.equipStack(EquipmentSlot.OFFHAND, replay.keyframes.offHand.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.HEAD, replay.keyframes.armorHead.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.CHEST, replay.keyframes.armorChest.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.LEGS, replay.keyframes.armorLegs.interpolate(tick, ItemStack.EMPTY));
-        actor.equipStack(EquipmentSlot.FEET, replay.keyframes.armorFeet.interpolate(tick, ItemStack.EMPTY));
+        boolean sneaking = EntityState.isOn(replay.keyframes.state(EntityState.SNEAKING).interpolate(tick));
+        boolean swimming = EntityState.isOn(replay.keyframes.state(EntityState.SWIMMING).interpolate(tick));
+        boolean gliding = EntityState.isOn(replay.keyframes.state(EntityState.GLIDING).interpolate(tick));
+
+        actor.setSneaking(sneaking);
+        actor.setOnGround(grounded);
+
+        /* The sprinting flag is tracked data, so setting it here is what makes the
+         * client spawn vanilla's sprinting particles for this actor. Swimming and gliding are
+         * the same kind of thing: the flag is what spreads the elytra's wings and lays the body
+         * flat on every client watching, and neither would happen from the frame alone. */
+        actor.setSprinting(EntityState.isOn(replay.keyframes.state(EntityState.SPRINTING).interpolate(tick)));
+        actor.setSwimming(swimming);
+        ((EntityInvoker) actor).bbs$setFlag(EntityState.FALL_FLYING_FLAG, gliding);
+        actor.setPose(EntityState.pose(gliding, swimming, sneaking));
+
+        /* Vanilla counts the roll up while flying, and an actor is placed rather than flown, so
+         * the recorded count is handed over - it's what ramps the elytra's dive. */
+        ((LivingEntityRollAccessor) actor).bbs$setRoll(replay.keyframes.roll.interpolate(tick).intValue());
+
+        /* Riding and creative flight are recorded but not written here: a replay doesn't mount
+         * anyone, and flight is a permission on a real player. Both only pick an animation. */
 
         if (actor instanceof ServerPlayerEntity player)
         {
-            int selectedSlot = player.getInventory().selectedSlot;
-            int slot = MathUtils.clamp(replay.keyframes.selectedSlot.interpolate(this.tick), 0, 8);
-
-            if (selectedSlot != slot)
+            /* On a player equipStack() is a write into the real inventory, so the replay may
+             * only dress one whose equipment the film borrowed at startup and gives back on
+             * stop. A replay turned first person mid-playback borrowed nothing and dresses
+             * nobody. */
+            if (this.borrowedEquipment)
             {
-                ServerNetwork.sendSelectedSlot(player, slot);
+                this.dressPlayer(player, replay.keyframes, tick);
             }
-
-            actor.equipStack(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
         }
         else
         {
-            actor.equipStack(EquipmentSlot.MAINHAND, replay.keyframes.mainHand.interpolate(tick, ItemStack.EMPTY));
+            actor.equipStack(EquipmentSlot.MAINHAND, replay.keyframes.getMainHandStack(tick));
+            actor.equipStack(EquipmentSlot.OFFHAND, replay.keyframes.offHand.interpolate(tick, ItemStack.EMPTY));
+            actor.equipStack(EquipmentSlot.HEAD, replay.keyframes.armorHead.interpolate(tick, ItemStack.EMPTY));
+            actor.equipStack(EquipmentSlot.CHEST, replay.keyframes.armorChest.interpolate(tick, ItemStack.EMPTY));
+            actor.equipStack(EquipmentSlot.LEGS, replay.keyframes.armorLegs.interpolate(tick, ItemStack.EMPTY));
+            actor.equipStack(EquipmentSlot.FEET, replay.keyframes.armorFeet.interpolate(tick, ItemStack.EMPTY));
         }
 
         double vx = x - replay.keyframes.x.interpolate(tick - 1);
@@ -209,12 +427,31 @@ public class ActionPlayer
 
         if (vy == 0D)
         {
-            vy = -0.0784;
+            vy = -ReplayKeyframes.GRAVITY_PROBE;
         }
 
         actor.setVelocity(vx, vy, vz);
 
         actor.fallDistance = replay.keyframes.fall.interpolate(tick).floatValue();
+    }
+
+    /**
+     * Lay the replay's frame out onto the first person player: nine hotbar cells, the armour,
+     * the off hand and the selection. Nothing is put into the main hand - that's the selected
+     * cell, and it's already there.
+     */
+    private void dressPlayer(ServerPlayerEntity player, ReplayKeyframes keyframes, float tick)
+    {
+        /* Selection first, so anything reading "the hand" during this frame reads the cell the
+         * frame means rather than the one it just left. */
+        int slot = keyframes.getSelectedSlot(tick);
+
+        if (player.getInventory().selectedSlot != slot)
+        {
+            ServerNetwork.sendSelectedSlot(player, slot);
+        }
+
+        keyframes.applyEquipment(tick, this.fpEntity);
     }
 
     public boolean tick()
@@ -225,6 +462,8 @@ public class ActionPlayer
 
             return false;
         }
+
+        this.reviveLostActors();
 
         for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
         {
@@ -272,8 +511,14 @@ public class ActionPlayer
 
             LivingEntity actor = this.actors.get(replay.getId());
 
-            replay.applyActions(actor, fakePlayer, this.film, this.tick);
+            /* Replay-local for the same reason the pose is - see apply(). The client answers its
+             * own clips on the wrapped tick, so an unwrapped one here had the two disagreeing. */
+            replay.applyActions(actor, fakePlayer, this.film, replay.getTick(this.tick));
         }
+
+        /* Chests the clips of this tick still hold open go up, the rest come
+         * down - including when the film was scrubbed rather than played */
+        fakePlayer.flushLids();
     }
 
     public void syncData(DataPath key, BaseType data)
@@ -287,9 +532,31 @@ public class ActionPlayer
             this.pendingResync = false;
             baseValue.fromData(data);
 
-            if (baseValue == this.film || baseValue.getId().equals("actor") || baseValue.getId().equals("enabled") || baseValue.getId().equals("replays"))
+            /* The edit may have moved the film's end - a keyframe past the camera's last clip, or
+             * a replay switched off - and the playback stops (and takes its actors down) by it. */
+            this.duration = this.film.calculateDuration();
+
+            if (baseValue == this.film || baseValue.getId().equals("actor") || baseValue.getId().equals("fp") || baseValue.getId().equals("enabled") || baseValue.getId().equals("replays"))
             {
                 this.updateReplayEntities();
+            }
+            else if (baseValue.getId().equals("actor_pickup") && baseValue.getParent() instanceof Replay replay)
+            {
+                if (this.actors.get(replay.getId()) instanceof ActorEntity actor)
+                {
+                    actor.setPickUpItems(replay.actorPickup.get());
+                }
+            }
+            else if (baseValue.getId().equals("form") && baseValue.getParent() instanceof Replay replay)
+            {
+                /* A costume change, not a change of cast: the body already standing there takes the
+                 * new form. Rebuilding the cast over it would hand every actor in the film a fresh
+                 * entity id, and until now nothing happened at all - the actor kept its old form
+                 * until something else forced a restart. */
+                if (this.actors.get(replay.getId()) instanceof ActorEntity actor)
+                {
+                    actor.setForm(FormUtils.copy(replay.form.get()));
+                }
             }
         }
         else if (!this.pendingResync && this.serverPlayer != null)
@@ -310,16 +577,6 @@ public class ActionPlayer
 
     public void goTo(int from, int tick)
     {
-        for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
-        {
-            Replay replay = (Replay) this.film.replays.get(entry.getKey());
-
-            if (replay != null)
-            {
-                this.apply(entry.getValue(), replay, this.tick, false);
-            }
-        }
-
         if (from != tick)
         {
             this.tick = from;
@@ -331,24 +588,67 @@ public class ActionPlayer
                 this.applyAction();
             }
         }
+        else
+        {
+            /* Nothing to replay, but the destination is still the destination: a rewind to the
+             * very frame the walk would have started from has to land there all the same. */
+            this.tick = tick;
+        }
+
+        /* Poses after the actions and at the destination, not before: replaying the actions walks
+         * the tick counter, and an actor placed before that walk stands on the frame it is leaving
+         * rather than the one it was asked for. A restart jumps from 0, so that stale frame was
+         * the very beginning - the actor appeared at the origin for a tick before catching up. */
+        for (Map.Entry<String, LivingEntity> entry : this.actors.entrySet())
+        {
+            Replay replay = (Replay) this.film.replays.get(entry.getKey());
+
+            if (replay != null)
+            {
+                this.apply(entry.getValue(), replay, this.tick, false);
+            }
+        }
     }
 
     public void stop()
     {
+        SuperFakePlayer fakePlayer = SuperFakePlayer.getIfPresent(this.world);
+
+        /* Nothing asks for a lid any more, so every one the film opened closes */
+        if (fakePlayer != null)
+        {
+            fakePlayer.flushLids();
+        }
+
         for (LivingEntity value : this.actors.values())
         {
             if (!value.isPlayer())
             {
+                /* Before the body goes: what it swept up during the take is the world's, not the
+                 * film's, and this is the last moment there is anywhere to put it back. */
+                if (value instanceof ActorEntity actor)
+                {
+                    actor.dropPickedUp();
+                }
+
                 value.discard();
             }
         }
 
-        if (this.type == PlayerType.NORMAL && this.serverPlayer != null && this.film.getFirstPersonReplay() != null)
+        /* Every way a playback ends comes through here - the film reaching its end, the editor
+         * stopping it, the player disconnecting, the server shutting down - so this is the one
+         * place that has to let damage control go. Releasing a hold that was already released
+         * does nothing, which is what makes stopping twice harmless. */
+        BBSMod.getActions().stopDamage(this.world, this);
+
+        /* Whether the equipment was borrowed, not whether it would be borrowed now: the film's
+         * first person replay can be toggled off mid-playback, and then there would be nothing
+         * to give back. */
+        if (this.borrowedEquipment)
         {
-            for (int i = 0; i < this.serverPlayer.getInventory().size(); i++)
-            {
-                this.serverPlayer.getInventory().setStack(i, this.cachedInventory.get(i));
-            }
+            this.refreshPlayer();
+
+            this.returnEquipment();
 
             ServerNetwork.sendMorphToTracked(this.serverPlayer, this.cachedForm);
 
