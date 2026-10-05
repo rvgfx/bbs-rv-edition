@@ -120,7 +120,27 @@ public class UIElement implements IUIElement, IUndoElement
     /**
      * Children elements
      */
-    private List<IUIElement> children = new ArrayList<>();
+    private List<IUIElement> children = new DebugChildren(); /* TEMP DEBUG CME */
+
+    /* TEMP DEBUG CME */
+    public static class DebugChildren extends ArrayList<IUIElement>
+    {
+        public int iterating;
+
+        private void check()
+        {
+            if (this.iterating > 0)
+            {
+                new Throwable("[BBS DEBUG] children modified during render").printStackTrace();
+            }
+        }
+
+        @Override public boolean add(IUIElement e) { this.check(); return super.add(e); }
+        @Override public void add(int i, IUIElement e) { this.check(); super.add(i, e); }
+        @Override public boolean remove(Object e) { this.check(); return super.remove(e); }
+        @Override public IUIElement remove(int i) { this.check(); return super.remove(i); }
+        @Override public void clear() { this.check(); super.clear(); }
+    }
 
     /**
      * Whether this element or anything under it listens to tree events. {@link #onAdd} and
@@ -1575,12 +1595,21 @@ public class UIElement implements IUIElement, IUndoElement
             context.resetTooltip();
         }
 
-        for (IUIElement element : this.children)
+        ((DebugChildren) this.children).iterating++; /* TEMP DEBUG CME */
+
+        try
         {
-            if (element.isVisible() && element.canBeRendered(context.getViewport()))
+            for (IUIElement element : this.children)
             {
-                element.render(context);
+                if (element.isVisible() && element.canBeRendered(context.getViewport()))
+                {
+                    element.render(context);
+                }
             }
+        }
+        finally
+        {
+            ((DebugChildren) this.children).iterating--;
         }
     }
 

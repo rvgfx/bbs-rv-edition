@@ -216,6 +216,10 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
         this.updateButtons();
         this.fill(null, false);
         this.add(this.scrollView);
+        this.add(this.scrollView);
+
+        this.onOpen(this::refreshOnOpen);
+        this.onClose(this::saveTouchedBlocks);
     }
 
     private static UIElement sectionHeader(IKey label)
@@ -230,11 +234,8 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
         return header;
     }
 
-    @Override
-    public void open()
+    private void refreshOnOpen()
     {
-        super.open();
-
         this.updateList();
 
         if (this.triggerBlock != null && this.triggerBlock.isRemoved())
@@ -243,11 +244,8 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
         }
     }
 
-    @Override
-    public void close()
+    private void saveTouchedBlocks()
     {
-        super.close();
-
         if (this.triggerBlock != null) this.toSave.add(this.triggerBlock);
 
         for (TriggerBlockEntity entity : this.toSave) this.save(entity);

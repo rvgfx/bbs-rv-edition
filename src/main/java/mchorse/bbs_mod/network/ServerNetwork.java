@@ -81,8 +81,8 @@ public class ServerNetwork
     public static final Identifier CLIENT_SELECTED_SLOT = new Identifier(BBSMod.MOD_ID, "c15");
     public static final Identifier CLIENT_ANIMATION_STATE_MODEL_BLOCK_TRIGGER = new Identifier(BBSMod.MOD_ID, "c16");
     public static final Identifier CLIENT_REFRESH_MODEL_BLOCKS = new Identifier(BBSMod.MOD_ID, "c17");
-    public static final Identifier CLIENT_CLICKED_TRIGGER_BLOCK_PACKET = new Identifier(BBSMod.MOD_ID, "c18");
-    public static final Identifier CLIENT_OPEN_PLAYBACK_PANEL = new Identifier(BBSMod.MOD_ID, "c19");
+    public static final Identifier CLIENT_CLICKED_TRIGGER_BLOCK_PACKET = new Identifier(BBSMod.MOD_ID, "c21");
+    public static final Identifier CLIENT_OPEN_PLAYBACK_PANEL = new Identifier(BBSMod.MOD_ID, "c22");
     public static final Identifier CLIENT_REQUEST_FILM_RESYNC = new Identifier(BBSMod.MOD_ID, "c18");
     public static final Identifier CLIENT_STRUCTURE_SAVED = new Identifier(BBSMod.MOD_ID, "c19");
     public static final Identifier CLIENT_STRUCTURE_CUT = new Identifier(BBSMod.MOD_ID, "c20");
@@ -103,8 +103,8 @@ public class ServerNetwork
     public static final Identifier SERVER_APPLY_FILM_PLAYER_SETTINGS = new Identifier(BBSMod.MOD_ID, "s14");
     public static final Identifier SERVER_SAVE_STRUCTURE = new Identifier(BBSMod.MOD_ID, "s15");
     public static final Identifier SERVER_CUT_STRUCTURE = new Identifier(BBSMod.MOD_ID, "s16");
-    public static final Identifier SERVER_TRIGGER_BLOCK_USE = new Identifier(BBSMod.MOD_ID, "s15");
-    public static final Identifier SERVER_TRIGGER_BLOCK_UPDATE = new Identifier(BBSMod.MOD_ID, "s16");
+    public static final Identifier SERVER_TRIGGER_BLOCK_USE = new Identifier(BBSMod.MOD_ID, "s18");
+    public static final Identifier SERVER_TRIGGER_BLOCK_UPDATE = new Identifier(BBSMod.MOD_ID, "s19");
     public static final Identifier SERVER_PLAYBACK_BUTTON = new Identifier(BBSMod.MOD_ID, "s17");
 
 

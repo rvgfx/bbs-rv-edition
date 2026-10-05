@@ -854,11 +854,6 @@ public class BBSSettings {
 		recordingCameraPreview = builder.getBoolean("camera_preview", true);
 		recordingTeleport = builder.getBoolean("teleport", true);
 
-		builder.category("model_blocks", Icons.BLOCK);
-		renderAllModelBlocks = builder.getBoolean("render_all", true);
-		clickModelBlocks = builder.getBoolean("click", true);
-		setPlayStateDistance = builder.getInt("play_state_distance", 64);
-
 		/* Output */
 		/* Ordered by how often it gets touched: the resolution first, then the
 		 * file, the sound and the frames, and the encoder last */
@@ -898,6 +893,7 @@ public class BBSSettings {
 		builder.category("model_blocks", Icons.BLOCK);
 		renderAllModelBlocks = builder.getBoolean("render_all", true);
 		clickModelBlocks = builder.getBoolean("click", true);
+		setPlayStateDistance = builder.getInt("play_state_distance", 64);
 
 		builder.category("cdn", Icons.SERVER);
 		cdnUrl = builder.getString("url", "");

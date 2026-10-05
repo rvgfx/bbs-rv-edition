@@ -140,7 +140,7 @@ public class UIKeyframeEditor extends UITimelinePanel
         for (int i = 0; i < channel.length; i++)
 
         {
-            this.view.addSheet(new UIKeyframeSheet(COLORS[i % COLORS.length], false, channel[i], null));
+            this.view.addSheet(new UIKeyframeSheet(COLORS[i % COLORS.length], channel[i], null));
         }
 
         this.pickKeyframe(null);
