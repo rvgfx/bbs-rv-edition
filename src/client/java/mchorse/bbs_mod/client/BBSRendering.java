@@ -9,15 +9,23 @@ import mchorse.bbs_mod.blocks.TriggerBlock;
 import mchorse.bbs_mod.blocks.entities.ModelBlockEntity;
 import mchorse.bbs_mod.blocks.entities.TriggerBlockEntity;
 import mchorse.bbs_mod.camera.clips.misc.*;
+import mchorse.bbs_mod.camera.clips.CameraClipContext;
+import mchorse.bbs_mod.camera.clips.misc.CurveClip;
 import mchorse.bbs_mod.camera.controller.CameraWorkCameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.events.ModelBlockEntityUpdateCallback;
 import mchorse.bbs_mod.events.TriggerBlockEntityUpdateCallback;
+import mchorse.bbs_mod.api.events.ModelBlockEntityUpdateCallback;
+import mchorse.bbs_mod.film.BaseFilmController;
+import mchorse.bbs_mod.film.WorldFilmController;
+import mchorse.bbs_mod.forms.FormRenderLast;
 import mchorse.bbs_mod.forms.renderers.utils.RecolorVertexConsumer;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.graphics.texture.Texture;
 import mchorse.bbs_mod.graphics.texture.TextureFormat;
 import mchorse.bbs_mod.ui.UIKeys;
 import mchorse.bbs_mod.ui.dashboard.UIDashboard;
+import mchorse.bbs_mod.ui.film.FrameOverlays;
 import mchorse.bbs_mod.ui.film.UIFilmPanel;
 import mchorse.bbs_mod.ui.film.UIHotbarRenderer;
 import mchorse.bbs_mod.ui.film.UISubtitleRenderer;
@@ -25,8 +33,12 @@ import mchorse.bbs_mod.ui.framework.UIBaseMenu;
 import mchorse.bbs_mod.ui.framework.UIScreen;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
 import mchorse.bbs_mod.ui.utils.icons.Icons;
+import mchorse.bbs_mod.cubic.model.ModelSetupQueue;
+import mchorse.bbs_mod.forms.renderers.utils.RenderFrame;
+import mchorse.bbs_mod.ui.utils.Gizmo;
 import mchorse.bbs_mod.utils.clips.ClipContext;
 import mchorse.bbs_mod.utils.colors.Color;
+import mchorse.bbs_mod.utils.profiler.BBSProfiler;
 import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.iris.IrisUtils;
 import mchorse.bbs_mod.utils.iris.ShaderCurves;
@@ -382,6 +394,19 @@ public class BBSRendering
         orthoDistance = -1F;
 
         MinecraftClient mc = MinecraftClient.getInstance();
+
+        /* The frame boundary the profiler's counters roll over on; the flag is mirrored here
+         * so the hot-path checks read a plain static boolean. */
+        BBSProfiler.enabled = BBSSettings.profilerOverlay != null && BBSSettings.profilerOverlay.get();
+        BBSProfiler.frame();
+        RenderFrame.nextFrame();
+        Gizmo.INSTANCE.forgetPlacement();
+
+        /* The budgeted tail of model loading: VAO bakes for whatever the background loader
+         * finished, a few milliseconds' worth per frame instead of all of them at once. */
+        ModelSetupQueue.drain();
+
+        BBSModClient.getVideos().startFrame();
         BBSModClient.getFilms().startRenderFrame(mc.getTickDelta());
 
         UIBaseMenu menu = UIScreen.getCurrentMenu();
@@ -421,6 +446,7 @@ public class BBSRendering
             renderHudOverlays(batcher, controller.getContext(), overlayWidth, overlayHeight);
 
             RenderSystem.setProjectionMatrix(cache, VertexSorter.BY_Z);
+            FrameOverlays.render(batcher.getContext().getMatrices(), batcher, controller.getContext());
         }
 
         if (!customSize)
@@ -436,6 +462,7 @@ public class BBSRendering
         {
             if (dashboard.getPanels().panel instanceof UIFilmPanel panel && panel.getData() != null)
             {
+                FrameOverlays.render(currentMenu.context.batcher.getContext().getMatrices(), currentMenu.context.batcher, panel.getRunner().getContext());
                 DrawContext drawContext = new DrawContext(mc, mc.getBufferBuilders().getEntityVertexConsumers());
                 Batcher2D batcher = new Batcher2D(drawContext);
                 Window window = mc.getWindow();
@@ -534,6 +561,7 @@ public class BBSRendering
         Batcher2D batcher2D = new Batcher2D(drawContext);
 
         BBSModClient.getFilms().renderHud(batcher2D, tickDelta);
+        StructureWand.renderHud(batcher2D);
     }
 
     /**
@@ -591,14 +619,48 @@ public class BBSRendering
         batcher2D.textCard(label, iconX + 3, y + 4, Colors.WHITE, Colors.A50);
     }
 
+    /** Whether the entity pass opened the render-last scope — false when one was already open. */
+    private static boolean entityPassRenderLast;
+
+    /**
+     * The world's entity pass: between these two calls vanilla draws the actors, model blocks
+     * and morphed players, and without a shader pack {@link #renderCoolStuff} draws the films
+     * at its end — one render-last scope spans it all, so a form set to render last draws after
+     * every other form of the frame. Under Iris the films run earlier, at the solid layer, in a
+     * scope of their own; this one still covers what the entity loop drew.
+     */
+    public static void beginEntityPass()
+    {
+        entityPassRenderLast = FormRenderLast.open();
+    }
+
+    public static void endEntityPass()
+    {
+        FormRenderLast.close(entityPassRenderLast);
+
+        entityPassRenderLast = false;
+    }
+
     public static void renderCoolStuff(WorldRenderContext worldRenderContext)
     {
-        if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
-        {
-            screen.renderInWorld(worldRenderContext);
-        }
+        /* A scope over everything drawn here, for when this runs on its own — under Iris, at the
+         * solid layer: forms set to render last draw when it closes, after the last replay, still
+         * in this pass. Inside the entity pass's scope this opens nothing and they wait for it. */
+        boolean renderLast = FormRenderLast.open();
 
-        BBSModClient.getFilms().render(worldRenderContext);
+        try
+        {
+            if (MinecraftClient.getInstance().currentScreen instanceof UIScreen screen)
+            {
+                screen.renderInWorld(worldRenderContext);
+            }
+
+            BBSModClient.getFilms().render(worldRenderContext);
+        }
+        finally
+        {
+            FormRenderLast.close(renderLast);
+        }
     }
 
     public static boolean isOptifinePresent()
@@ -698,6 +760,28 @@ public class BBSRendering
         }
 
         return IrisUtils.isShaderPackEnabled();
+    }
+
+    /**
+     * Whether a shader pack is shading this very draw. Unlike {@link #isIrisShadersEnabled()}
+     * it turns off inside {@link #renderOffscreen(Runnable)}, where our own programs take over.
+     */
+    public static boolean isIrisWorldShadersEnabled()
+    {
+        return iris && renderingWorld && IrisUtils.shouldOverrideShaders();
+    }
+
+    /** Render into a framebuffer of ours: see {@link IrisUtils#renderOffscreen(Runnable)}. */
+    public static void renderOffscreen(Runnable render)
+    {
+        if (iris)
+        {
+            IrisUtils.renderOffscreen(render);
+        }
+        else
+        {
+            render.run();
+        }
     }
 
     public static boolean isIrisShadowPass()
@@ -818,68 +902,35 @@ public class BBSRendering
 
     public static Long getTimeOfDay()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
+        Double value = getCurveValue(ShaderCurves.SUN_ROTATION, CurveClip::getValues);
 
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.SUN_ROTATION) : null;
-
-            if (v != null)
-            {
-                return (long) (v * 1000L);
-            }
-        }
-
-        return null;
+        return value == null ? null : (long) (value * 1000L);
     }
 
     public static Double getBrightness()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
-
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.BRIGHTNESS) : null;
-
-            if (v != null)
-            {
-                return v;
-            }
-        }
-
-        return null;
+        return getCurveValue(ShaderCurves.BRIGHTNESS, CurveClip::getValues);
     }
 
     public static Double getWeather()
     {
-        if (!MinecraftClient.getInstance().isOnThread())
-        {
-            return null;
-        }
+        return getCurveValue(ShaderCurves.WEATHER, CurveClip::getValues);
+    }
 
-        if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
-        {
-            Map<String, Double> values = CurveClip.getValues(controller.getContext());
-            Double v = values != null ? values.get(ShaderCurves.WEATHER) : null;
+    public static float getSunHorizontalRotation()
+    {
+        Double value = getCurveValue(ShaderCurves.SUN_HORIZONTAL_ROTATION, CurveClip::getValues);
 
-            if (v != null)
-            {
-                return v;
-            }
-        }
-
-        return null;
+        return value == null ? 0F : value.floatValue();
     }
 
     public static Integer getChromaSkyColorArgb()
+    {
+        return getCurveValue(CurveClip.CHROMA_SKY_COLOR, CurveClip::getColorValues);
+    }
+
+    /** Camera work takes priority; films played without a camera supply missing values. */
+    private static <T> T getCurveValue(String key, Function<CameraClipContext, Map<String, T>> values)
     {
         if (!MinecraftClient.getInstance().isOnThread())
         {
@@ -888,11 +939,27 @@ public class BBSRendering
 
         if (BBSModClient.getCameraController().getCurrent() instanceof CameraWorkCameraController controller)
         {
-            Map<String, Integer> values = CurveClip.getColorValues(controller.getContext());
+            T value = values.apply(controller.getContext()).get(key);
 
-            if (values != null)
+            if (value != null)
             {
-                return values.get(CurveClip.CHROMA_SKY_COLOR);
+                return value;
+            }
+        }
+
+        if (BBSModClient.getFilms() != null)
+        {
+            for (BaseFilmController controller : BBSModClient.getFilms().getControllers())
+            {
+                if (controller instanceof WorldFilmController worldFilm)
+                {
+                    T value = values.apply(worldFilm.getContext()).get(key);
+
+                    if (value != null)
+                    {
+                        return value;
+                    }
+                }
             }
         }
 

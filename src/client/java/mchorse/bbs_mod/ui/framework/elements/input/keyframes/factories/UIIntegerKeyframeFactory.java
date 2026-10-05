@@ -181,14 +181,8 @@ public class UIIntegerKeyframeFactory extends UINumericKeyframeFactory<Integer>
     }
 
     @Override
-    protected void setKeyframeValue(double value)
+    protected void setKeyframeValue(Keyframe<Integer> keyframe, double value)
     {
-        this.keyframe.setValue((int) value);
-    }
-
-    @Override
-    protected TrackpadRecorder.ValueConverter createValueConverter()
-    {
-        return (value) -> (int) value;
+        keyframe.setValue((int) value);
     }
 }

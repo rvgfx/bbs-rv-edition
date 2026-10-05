@@ -9,6 +9,8 @@ import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.data.DataStorageUtils;
 import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
+import mchorse.bbs_mod.forms.structure.StructureCut;
+import mchorse.bbs_mod.forms.structure.StructureWand;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
 import mchorse.bbs_mod.entity.IEntityFormProvider;
 import mchorse.bbs_mod.film.Film;
@@ -110,9 +112,29 @@ public class ClientNetwork
             });
         });
         ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_REQUEST_FILM_RESYNC, (client, handler, buf, responseSender) -> handleRequestFilmResync(client, buf));
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_STRUCTURE_SAVED, (client, handler, buf, responseSender) -> handleStructureSaved(client, buf));
+        ClientPlayNetworking.registerGlobalReceiver(ServerNetwork.CLIENT_STRUCTURE_CUT, (client, handler, buf, responseSender) -> handleStructureCut(client, buf));
     }
 
     /* Handlers */
+
+    /** The server's answer to a film cut: whether the file got written and the region emptied. */
+    private static void handleStructureCut(MinecraftClient client, PacketByteBuf buf)
+    {
+        boolean ok = buf.readBoolean();
+        String name = buf.readString();
+
+        client.execute(() -> StructureCut.onCut(ok, name));
+    }
+
+    /** The server's answer to the wand: whether the file got written, and under which id. */
+    private static void handleStructureSaved(MinecraftClient client, PacketByteBuf buf)
+    {
+        boolean saved = buf.readBoolean();
+        String name = buf.readString();
+
+        client.execute(() -> StructureWand.onSaved(saved, name));
+    }
 
     private static void handleClientModelBlockPacket(MinecraftClient client, PacketByteBuf buf)
     {
@@ -368,6 +390,7 @@ public class ClientNetwork
     {
         Map<String, Integer> actors = new HashMap<>();
         String filmId = buf.readString();
+        boolean merge = buf.readBoolean();
 
         for (int i = 0, c = buf.readInt(); i < c; i++)
         {
@@ -379,11 +402,17 @@ public class ClientNetwork
 
         client.execute(() ->
         {
-            UIDashboard dashboard = BBSModClient.getDashboard();
-            UIFilmPanel panel = dashboard.getPanel(UIFilmPanel.class);
+            BBSModClient.getFilms().updateActors(filmId, actors, merge);
 
-            panel.updateActors(filmId, actors);
-            BBSModClient.getFilms().updateActors(filmId, actors);
+            /* Only if the dashboard is already there: building it costs the whole UI, and this
+             * packet reaches every player in the world - including ones who never opened BBS. */
+            UIDashboard dashboard = BBSModClient.getDashboardIfCreated();
+            UIFilmPanel panel = dashboard == null ? null : dashboard.getPanel(UIFilmPanel.class);
+
+            if (panel != null)
+            {
+                panel.updateActors(filmId, BBSModClient.getFilms().getActors(filmId));
+            }
         });
     }
 
@@ -600,6 +629,30 @@ public class ClientNetwork
                 packetByteBuf.writeString(string);
             }
         });
+    }
+
+    /** Ask the server to write the wand's region out. The reply drops the structure cache. */
+    /** Save the region and empty it out of the world, for the film cut. */
+    public static void sendCutStructure(String name, BlockPos from, BlockPos to)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeString(name);
+        buf.writeBlockPos(from);
+        buf.writeBlockPos(to);
+
+        ClientPlayNetworking.send(ServerNetwork.SERVER_CUT_STRUCTURE, buf);
+    }
+
+    public static void sendSaveStructure(String name, BlockPos from, BlockPos to)
+    {
+        PacketByteBuf buf = PacketByteBufs.create();
+
+        buf.writeString(name);
+        buf.writeBlockPos(from);
+        buf.writeBlockPos(to);
+
+        ClientPlayNetworking.send(ServerNetwork.SERVER_SAVE_STRUCTURE, buf);
     }
 
     public static void sendTeleport(PlayerEntity entity, double x, double y, double z)
