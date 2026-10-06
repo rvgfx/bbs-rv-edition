@@ -1271,6 +1271,8 @@ public class UIKeys
     public static final IKey REMOVE_TRIGGER = L10n.lang("bbs.ui.trigger_blocks.remove_trigger");
     public static final IKey ACTION_TYPE = L10n.lang("bbs.ui.trigger_blocks.action_type");
     public static final IKey ACTION_COMMAND = L10n.lang("bbs.ui.trigger_blocks.action_command");
+    public static final IKey RUN_PER_SERVER = L10n.lang("bbs.ui.trigger_blocks.run_per_server");
+    public static final IKey RUN_PER_SERVER_TOOLTIP = L10n.lang("bbs.ui.trigger_blocks.run_per_server_tooltip");
     public static final IKey ACTION_FORM = L10n.lang("bbs.ui.trigger_blocks.action_form");
     public static final IKey ACTION_BLOCK_FORM = L10n.lang("bbs.ui.trigger_blocks.action_block_form");
     public static final IKey ACTION_BLOCK_POS = L10n.lang("bbs.ui.trigger_blocks.action_block_pos");
