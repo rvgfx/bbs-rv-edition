@@ -1599,8 +1599,12 @@ public class UIElement implements IUIElement, IUndoElement
 
         try
         {
-            for (IUIElement element : this.children)
+            /* Index loop: a child may add/remove siblings while rendering (e.g. opening an overlay),
+             * which made the iterator throw ConcurrentModificationException */
+            for (int i = 0; i < this.children.size(); i++)
             {
+                IUIElement element = this.children.get(i);
+
                 if (element.isVisible() && element.canBeRendered(context.getViewport()))
                 {
                     element.render(context);
