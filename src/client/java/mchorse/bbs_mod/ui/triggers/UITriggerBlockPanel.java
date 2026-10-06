@@ -216,7 +216,6 @@ public class UITriggerBlockPanel extends UIDashboardPanel implements IFlightSupp
         this.updateButtons();
         this.fill(null, false);
         this.add(this.scrollView);
-        this.add(this.scrollView);
 
         this.onOpen(this::refreshOnOpen);
         this.onClose(this::saveTouchedBlocks);
