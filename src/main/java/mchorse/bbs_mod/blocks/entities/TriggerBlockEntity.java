@@ -17,10 +17,13 @@ import mchorse.bbs_mod.triggers.Trigger;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -120,19 +123,7 @@ public class TriggerBlockEntity extends BlockEntity
 
                 if (type.equals("command"))
                 {
-                    String cmd = trigger.command.get();
-
-                    if (!cmd.isEmpty())
-                    {
-                        try
-                        {
-                            player.getServer().getCommandManager().executeWithPrefix(player.getCommandSource().withLevel(2), cmd);
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
+                    this.runCommand(player, trigger);
                 }
                 else if (type.equals("form"))
                 {
@@ -182,31 +173,49 @@ public class TriggerBlockEntity extends BlockEntity
 
                 if (type.equals("command"))
                 {
-                    String cmd = trigger.command.get();
-
-                    if (!cmd.isEmpty())
-                    {
-                        // Substitute entity placeholders
-                        cmd = cmd
-                                .replace("%player%", entity.getEntityName())
-                                .replace("%uuid%", entity.getUuidAsString())
-                                .replace("%x%", String.valueOf(entity.getBlockPos().getX()))
-                                .replace("%y%", String.valueOf(entity.getBlockPos().getY()))
-                                .replace("%z%", String.valueOf(entity.getBlockPos().getZ()));
-
-                        try
-                        {
-                            entity.getServer().getCommandManager().executeWithPrefix(
-                                    entity.getServer().getCommandSource(), cmd
-                            );
-                        }
-                        catch (Exception e)
-                        {
-                            e.printStackTrace();
-                        }
-                    }
+                    this.runCommand(entity, trigger);
                 }
             }
+        }
+    }
+
+    private void runCommand(Entity entity, Trigger trigger)
+    {
+        String cmd = trigger.command.get();
+
+        if (cmd.isEmpty())
+        {
+            return;
+        }
+
+        cmd = cmd
+            .replace("%player%", entity.getEntityName())
+            .replace("%uuid%", entity.getUuidAsString())
+            .replace("%x%", String.valueOf(entity.getBlockPos().getX()))
+            .replace("%y%", String.valueOf(entity.getBlockPos().getY()))
+            .replace("%z%", String.valueOf(entity.getBlockPos().getZ()));
+
+        MinecraftServer server = entity.getServer();
+        ServerCommandSource source = server.getCommandSource();
+
+        if (!trigger.perServer.get())
+        {
+            /* Per player: the triggering player, or the nearest one when an entity triggered it */
+            PlayerEntity player = entity instanceof ServerPlayerEntity ? (PlayerEntity) entity : entity.getWorld().getClosestPlayer(entity, -1D);
+
+            if (player != null)
+            {
+                source = player.getCommandSource().withLevel(2);
+            }
+        }
+
+        try
+        {
+            server.getCommandManager().executeWithPrefix(source, cmd);
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
         }
     }
 

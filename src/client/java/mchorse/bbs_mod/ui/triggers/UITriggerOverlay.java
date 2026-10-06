@@ -235,7 +235,10 @@ public class UITriggerOverlay extends UIEditorOverlayPanel<Trigger> {
             UITextbox command = new UITextbox(1000, (t) -> item.command.set(t));
             command.setText(item.command.get());
 
-            this.editor.add(UI.label(UIKeys.ACTION_COMMAND), command);
+            UIToggle perServer = new UIToggle(UIKeys.RUN_PER_SERVER, item.perServer.get(), (b) -> item.perServer.set(b.getValue()));
+            perServer.tooltip(UIKeys.RUN_PER_SERVER_TOOLTIP);
+
+            this.editor.add(UI.label(UIKeys.ACTION_COMMAND), command, perServer);
         }
         else if (type.equals("form"))
         {

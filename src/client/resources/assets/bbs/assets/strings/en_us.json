@@ -1774,6 +1774,8 @@
 	"bbs.ui.trigger_blocks.action_block_form": "Model block Form",
 	"bbs.ui.trigger_blocks.action_block_pos": "Block Position",
 	"bbs.ui.trigger_blocks.action_command": "Command",
+	"bbs.ui.trigger_blocks.run_per_server": "Run per server",
+	"bbs.ui.trigger_blocks.run_per_server_tooltip": "On: runs as the console (Per Server). Off: runs as the player who triggered it, or the nearest player for entities (Per Player).",
 	"bbs.ui.trigger_blocks.action_film": "Film",
 	"bbs.ui.trigger_blocks.action_form": "Form",
 	"bbs.ui.trigger_blocks.action_type": "Action type",
