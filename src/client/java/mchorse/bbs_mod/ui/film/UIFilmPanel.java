@@ -18,6 +18,7 @@ import mchorse.bbs_mod.data.types.BaseType;
 import mchorse.bbs_mod.data.types.MapType;
 import mchorse.bbs_mod.film.Film;
 import mchorse.bbs_mod.film.FrozenFilmController;
+import mchorse.bbs_mod.film.VideoExportSession;
 import mchorse.bbs_mod.film.markers.FilmMarker;
 import mchorse.bbs_mod.film.Recorder;
 import mchorse.bbs_mod.film.replays.Replay;
@@ -1838,6 +1839,13 @@ public class UIFilmPanel extends UIDataDashboardPanel<Film> implements IFlightSu
         if (this.data == null || !ClientNetwork.isIsBBSModOnServer())
         {
             return;
+        }
+
+        /* While exporting, a remote server is driven per tick by PanelVideoExportSession;
+         * playing on its own it runs ahead of the slower-than-real-time render */
+        if (state == ActionState.PLAY && this.recorder.isExporting() && VideoExportSession.isRemoteServer())
+        {
+            state = ActionState.PAUSE;
         }
 
         String id = this.data.getId();

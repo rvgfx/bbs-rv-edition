@@ -31,6 +31,8 @@ public class WorldVideoExportSession extends VideoExportSession
     /** The film being recorded (F6), used to render its audio track; {@code null} for a plain world recording (F4). */
     private Film film;
     private boolean firstTickPaused;
+    /** Last film tick sent to a remote server's action player, or -1 if none yet. */
+    private int syncedTick = -1;
 
     public String getFilmId()
     {
@@ -58,6 +60,7 @@ public class WorldVideoExportSession extends VideoExportSession
         this.filmId = filmId;
         this.film = film;
         this.firstTickPaused = false;
+        this.syncedTick = -1;
 
         long delayMs = (long) (Math.max(0F, BBSSettings.videoDelay.get()) * 1000F);
         boolean started = this.begin(BBSRendering.getTexture().id, size.width, size.height, delayMs);
@@ -169,13 +172,43 @@ public class WorldVideoExportSession extends VideoExportSession
                 }
             }
 
-            if (ClientNetwork.isIsBBSModOnServer())
+            /* A remote server is driven per tick by onRecordingTick() instead */
+            if (ClientNetwork.isIsBBSModOnServer() && !isRemoteServer())
             {
                 ClientNetwork.sendActionState(this.filmId, ActionState.PLAY, tick);
             }
         }
 
+        this.onRecordingTick();
+
         BBSRendering.setCustomSize(this.getRecorder().isRecording(), this.width, this.height);
+    }
+
+    @Override
+    protected void onRecordingTick()
+    {
+        if (this.filmId == null || !isRemoteServer())
+        {
+            return;
+        }
+
+        BaseFilmController controller = BBSModClient.getFilms().getController(this.filmId);
+
+        if (controller == null)
+        {
+            return;
+        }
+
+        int tick = Math.max(controller.getTick(), 0);
+
+        /* Keep the server's action player paused on the rendered tick: goTo() walks every tick
+         * in between, so no action is skipped, and it can never run ahead of the export */
+        if (tick != this.syncedTick)
+        {
+            this.syncedTick = tick;
+
+            ClientNetwork.sendActionState(this.filmId, ActionState.PAUSE, tick);
+        }
     }
 
     @Override
@@ -192,6 +225,11 @@ public class WorldVideoExportSession extends VideoExportSession
         {
             Films.playFilm(this.filmId, false);
         }
+        else if (!cancelled && this.syncedTick >= 0 && isRemoteServer())
+        {
+            /* The client film ended on its own; let the paused server one play out its last ticks and end too */
+            ClientNetwork.sendActionState(this.filmId, ActionState.PLAY, this.syncedTick);
+        }
 
         BBSRendering.setCustomSize(false, 0, 0);
         this.windowSession.restore();
@@ -199,6 +237,7 @@ public class WorldVideoExportSession extends VideoExportSession
         this.filmId = null;
         this.film = null;
         this.firstTickPaused = false;
+        this.syncedTick = -1;
     }
 
     private void applyWindowSize(VideoSize size)

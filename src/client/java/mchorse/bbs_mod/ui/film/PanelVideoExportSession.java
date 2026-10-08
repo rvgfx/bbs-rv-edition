@@ -32,6 +32,8 @@ public class PanelVideoExportSession extends VideoExportSession
     private int duration;
     private int end;
     private boolean restorePaused;
+    /** Last cursor tick sent to a remote server's action player, or -1 if none yet. */
+    private int syncedTick = -1;
 
     public PanelVideoExportSession(UIFilmRecorder ui, UIFilmPanel editor)
     {
@@ -76,6 +78,7 @@ public class PanelVideoExportSession extends VideoExportSession
         }
 
         this.restorePaused = this.editor.getController().isPaused();
+        this.syncedTick = -1;
 
         int min = this.editor.cameraEditor.clips.loopMin;
         int max = this.editor.cameraEditor.clips.loopMax;
@@ -166,6 +169,22 @@ public class PanelVideoExportSession extends VideoExportSession
     {
         this.editor.getController().setPaused(false);
         this.editor.togglePlayback();
+        this.onRecordingTick();
+    }
+
+    @Override
+    protected void onRecordingTick()
+    {
+        int tick = this.editor.getCursor();
+
+        /* Keep a remote server's action player paused on the rendered tick (see
+         * UIFilmPanel.notifyServer()), so its actions can't run ahead of the export */
+        if (isRemoteServer() && tick != this.syncedTick)
+        {
+            this.syncedTick = tick;
+
+            this.editor.notifyServer(ActionState.PAUSE);
+        }
     }
 
     @Override

@@ -7,9 +7,11 @@ import mchorse.bbs_mod.audio.MinecraftSoundMixer;
 import mchorse.bbs_mod.audio.Wave;
 import mchorse.bbs_mod.audio.wav.WaveReader;
 import mchorse.bbs_mod.client.BBSRendering;
+import mchorse.bbs_mod.network.ClientNetwork;
 import mchorse.bbs_mod.utils.StringUtils;
 import mchorse.bbs_mod.utils.VideoMuxer;
 import mchorse.bbs_mod.utils.VideoRecorder;
+import net.minecraft.client.MinecraftClient;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -53,6 +55,16 @@ public abstract class VideoExportSession
     private long recordingStartedAtMs;
 
     private FinishedListener finishedListener;
+
+    /**
+     * Whether the film's actions run on a remote (dedicated) server. Its action player
+     * would run ahead in real time while the export renders slower, so the export drives
+     * it tick by tick with PAUSE instead of letting it PLAY.
+     */
+    public static boolean isRemoteServer()
+    {
+        return ClientNetwork.isIsBBSModOnServer() && !MinecraftClient.getInstance().isIntegratedServerRunning();
+    }
 
     protected VideoRecorder getRecorder()
     {
@@ -153,6 +165,8 @@ public abstract class VideoExportSession
         }
         else if (this.state == State.RECORDING)
         {
+            this.onRecordingTick();
+
             if (this.isFinished())
             {
                 this.stop();
@@ -484,6 +498,10 @@ public abstract class VideoExportSession
 
     /** Invoked right after the recorder starts (e.g. resume playback). */
     protected abstract void onRecordingStarted();
+
+    /** Invoked on every update while recording (e.g. sync the server's actions). */
+    protected void onRecordingTick()
+    {}
 
     /** Whether the recording has reached its natural end. */
     protected abstract boolean isFinished();
