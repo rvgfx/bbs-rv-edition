@@ -528,6 +528,21 @@ public class KeyframeChannel <T> extends ValueList<Keyframe<T>>
         this.preNotify();
 
         Keyframe<T> prev;
+        int size = this.list.size();
+
+        /* Appending past the last keyframe (what recording does every tick) can't break the
+         * order, so skip the scan, sort and full id resync - those are O(n) per insert and made
+         * recording slower the longer the take ran. */
+        if (size == 0 || tick > this.list.get(size - 1).getTick())
+        {
+            Keyframe<T> keyframe = new Keyframe<>("", this.factory, tick, value);
+
+            this.add(keyframe);
+            keyframe.setId(String.valueOf(size));
+            this.postNotify();
+
+            return size;
+        }
 
         if (!this.list.isEmpty())
         {
