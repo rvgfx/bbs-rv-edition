@@ -122,6 +122,10 @@ public class BBSSettings {
 
 	public static ValueString videoEncoderPath;
 	public static ValueBoolean videoEncoderLog;
+	public static ValueInt videoCodec;
+	public static ValueInt videoHardwareEncoder;
+	public static ValueInt videoQuality;
+	public static ValueBoolean videoGpuColorConversion;
 	public static ValueBoolean worldExportResizeWindow;
 	public static ValueInt videoWidth;
 	public static ValueInt videoHeight;
@@ -875,6 +879,10 @@ public class BBSSettings {
 		videoPlaySoundAfterExport = builder.getBoolean("play_sound_after_export", true);
 		videoEncoderPath = builder.getString("encoder_path", "ffmpeg");
 		videoEncoderLog = builder.getBoolean("log", true);
+		videoCodec = builder.getInt("codec", 0, 0, 2);
+		videoHardwareEncoder = builder.getInt("hardware_encoder", 0, 0, 4);
+		videoQuality = builder.getInt("quality", 20, 0, 51);
+		videoGpuColorConversion = builder.getBoolean("gpu_color_conversion", true);
 		videoArguments = builder.getString("arguments", DEFAULT_FFMPEG_ARGUMENTS);
 		videoArgumentsAudio = builder.getString("arguments_audio", DEFAULT_AUDIO_FFMPEG_ARGUMENTS);
 		videoArgumentsMux = builder.getString("arguments_mux", DEFAULT_MUX_FFMPEG_ARGUMENTS);

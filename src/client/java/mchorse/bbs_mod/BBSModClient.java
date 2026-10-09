@@ -638,6 +638,15 @@ public class BBSModClient implements ClientModInitializer
             UIKeys.ENGINE_KEYSTROKES_POSITION_TOP_LEFT
         );
 
+        BBSSettings.videoCodec.modes(IKey.constant("H.264"), IKey.constant("H.265 / HEVC"), IKey.constant("AV1"));
+        BBSSettings.videoHardwareEncoder.modes(
+            UIKeys.VIDEO_ENCODER_AUTO,
+            IKey.constant("CPU"),
+            IKey.constant("NVIDIA (NVENC)"),
+            IKey.constant("AMD (AMF)"),
+            IKey.constant("Intel (QSV)")
+        );
+
         BBSSettings.rotate3dSphereMode.modes(
             UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL,
             UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL

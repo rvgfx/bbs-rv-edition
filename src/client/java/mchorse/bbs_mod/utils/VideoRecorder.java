@@ -25,17 +25,29 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 public class VideoRecorder
 {
     private static final Link RENDER_COMPLETE_SOUND = Link.assets("sounds/render_complete.ogg");
 
+    /**
+     * How many frames may wait for ffmpeg before the render thread blocks. Keeps rendering
+     * and encoding overlapped; memory cost is FRAME_QUEUE * width * height * 3 bytes.
+     */
+    private static final int FRAME_QUEUE = 4;
+    private static final ByteBuffer END_OF_STREAM = ByteBuffer.allocate(0);
+
     private Process process;
     private WritableByteChannel channel;
     private boolean recording;
 
-    private ByteBuffer buffer;
+    private BlockingQueue<ByteBuffer> freeFrames;
+    private BlockingQueue<ByteBuffer> pendingFrames;
+    private Thread writer;
+    private VideoYUVConverter yuv;
     private int textureId = -1;
     private int textureWidth;
     private int textureHeight;
@@ -79,11 +91,6 @@ public class VideoRecorder
 
         int size = width * height * 3;
 
-        if (this.buffer == null)
-        {
-            this.buffer = MemoryUtil.memAlloc(size);
-        }
-
         try
         {
             File movies = BBSRendering.getVideoFolder();
@@ -100,7 +107,34 @@ public class VideoRecorder
             String params = audioFile == null
                 ? BBSSettings.videoArguments.get()
                 : BBSSettings.videoArgumentsAudio.get();
-            StringBuilder filters = new StringBuilder("vflip");
+
+            params = VideoEncoders.apply(params);
+
+            /* GPU colour conversion needs the stock bgr24 input and filter tokens to swap out */
+            if (BBSSettings.videoGpuColorConversion.get()
+                && VideoYUVConverter.supports(width, height)
+                && params.contains("-pix_fmt bgr24")
+                && params.contains("-vf %FILTERS%"))
+            {
+                this.yuv = new VideoYUVConverter(width, height);
+
+                if (!this.yuv.isValid())
+                {
+                    this.yuv.delete();
+                    this.yuv = null;
+                }
+            }
+
+            if (this.yuv != null)
+            {
+                params = params
+                    .replace("-pix_fmt bgr24", "-pix_fmt yuv420p")
+                    .replace("-vf %FILTERS%", "-vf %FILTERS% -colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv");
+                size = VideoYUVConverter.getFrameSize(width, height);
+            }
+
+            /* The YUV shader already flips, "null" keeps -vf valid without motion blur */
+            StringBuilder filters = new StringBuilder(this.yuv == null ? "vflip" : "null");
             float frameRate = (float) BBSRendering.getVideoFrameRate();
 
             int motionBlur = BBSRendering.getMotionBlur();
@@ -142,7 +176,7 @@ public class VideoRecorder
             System.out.println("Recording video with following arguments: " + args);
 
             /**
-             * macOS reads the frame synchronously straight into {@link #buffer} (see
+             * macOS reads the frame synchronously into a pooled frame buffer (see
              * {@link #recordFrameDirect()}); the asynchronous PBO pipeline below misbehaves
              * there and produces pitch-black footage, so we only set it up off macOS.
              */
@@ -205,13 +239,30 @@ public class VideoRecorder
             }
 
             this.channel = Channels.newChannel(os);
+            this.freeFrames = new ArrayBlockingQueue<>(FRAME_QUEUE);
+            this.pendingFrames = new ArrayBlockingQueue<>(FRAME_QUEUE + 1);
+
+            for (int i = 0; i < FRAME_QUEUE; i++)
+            {
+                this.freeFrames.add(MemoryUtil.memAlloc(size));
+            }
+
             this.recording = true;
+            this.writer = new Thread(this::writeFrames, "BBS video writer");
+            this.writer.setDaemon(true);
+            this.writer.start();
 
             UIUtils.playClick(2F);
         }
         catch (Exception e)
         {
             e.printStackTrace();
+
+            if (this.yuv != null)
+            {
+                this.yuv.delete();
+                this.yuv = null;
+            }
         }
 
         this.serverTicks = this.lastServerTicks = 0;
@@ -248,11 +299,36 @@ public class VideoRecorder
         this.pbos = null;
         this.textureId = -1;
 
-        if (this.buffer != null)
+        if (this.yuv != null)
         {
-            MemoryUtil.memFree(this.buffer);
+            this.yuv.delete();
+            this.yuv = null;
+        }
 
-            this.buffer = null;
+        if (this.writer != null)
+        {
+            try
+            {
+                this.pendingFrames.put(END_OF_STREAM);
+                this.writer.join();
+            }
+            catch (InterruptedException e)
+            {
+                e.printStackTrace();
+            }
+
+            this.writer = null;
+        }
+
+        if (this.freeFrames != null)
+        {
+            for (ByteBuffer frame : this.freeFrames)
+            {
+                MemoryUtil.memFree(frame);
+            }
+
+            this.freeFrames = null;
+            this.pendingFrames = null;
         }
 
         try
@@ -348,10 +424,8 @@ public class VideoRecorder
             int pbo = this.pboIndex;
             int nextPbo = (this.pboIndex + 1) % this.pbos.length;
 
-            GL30.glPixelStorei(GL30.GL_PACK_ALIGNMENT, 1);
             GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbos[pbo]);
-            GL30.glBindTexture(GL30.GL_TEXTURE_2D, this.textureId);
-            GL30.glGetTexImage(GL30.GL_TEXTURE_2D, 0, GL30.GL_BGR, GL30.GL_UNSIGNED_BYTE, 0);
+            this.readTexture(0L);
 
             GL30.glBindBuffer(GL30.GL_PIXEL_PACK_BUFFER, this.pbos[nextPbo]);
 
@@ -359,7 +433,12 @@ public class VideoRecorder
 
             if (mappedBuffer != null && this.counter != 0)
             {
-                this.channel.write(mappedBuffer);
+                ByteBuffer frame = this.freeFrames.take();
+
+                frame.clear();
+                frame.put(mappedBuffer);
+                frame.flip();
+                this.pendingFrames.put(frame);
             }
 
             GL30.glUnmapBuffer(GL30.GL_PIXEL_PACK_BUFFER);
@@ -374,26 +453,89 @@ public class VideoRecorder
     }
 
     /**
-     * Synchronous read-back path (macOS): {@code glGetTexImage} straight into {@link #buffer}
+     * Synchronous read-back path (macOS): {@code glGetTexImage} into a pooled frame
      * and write it to ffmpeg. Simpler and stalls the render thread, but avoids the
      * pixel-pack-buffer path that renders black on macOS.
      */
     private void recordFrameDirect()
     {
-        this.buffer.clear();
-
-        GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureId);
-        GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL12.GL_BGR, GL11.GL_UNSIGNED_BYTE, this.buffer);
-        this.buffer.rewind();
-
         try
         {
-            this.channel.write(this.buffer);
+            ByteBuffer frame = this.freeFrames.take();
+
+            frame.clear();
+            this.readTexture(MemoryUtil.memAddress(frame));
+            this.pendingFrames.put(frame);
         }
         catch (Exception e)
         {
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Read the frame either into the bound pixel pack buffer (address is an offset)
+     * or straight into memory. With the YUV converter it's 1.5 bytes per pixel of
+     * ready yuv420p, otherwise bgr24 that ffmpeg flips and converts itself.
+     */
+    private void readTexture(long address)
+    {
+        GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
+
+        if (this.yuv != null)
+        {
+            this.yuv.convert(this.textureId);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.yuv.getTexture());
+            GL11.nglGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, address);
+        }
+        else
+        {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureId);
+            GL11.nglGetTexImage(GL11.GL_TEXTURE_2D, 0, GL12.GL_BGR, GL11.GL_UNSIGNED_BYTE, address);
+        }
+    }
+
+    /**
+     * Writer thread: pushes queued frames into ffmpeg's stdin so the render thread
+     * doesn't wait on the pipe. If ffmpeg dies, frames are still drained back into
+     * the pool so the render thread can never deadlock on {@link #freeFrames}.
+     */
+    private void writeFrames()
+    {
+        boolean failed = false;
+
+        while (true)
+        {
+            ByteBuffer frame;
+
+            try
+            {
+                frame = this.pendingFrames.take();
+            }
+            catch (InterruptedException e)
+            {
+                return;
+            }
+
+            if (frame == END_OF_STREAM)
+            {
+                return;
+            }
+
+            if (!failed)
+            {
+                try
+                {
+                    this.channel.write(frame);
+                }
+                catch (IOException e)
+                {
+                    failed = true;
+                    e.printStackTrace();
+                }
+            }
+
+            this.freeFrames.add(frame);
         }
     }
 
