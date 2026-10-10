@@ -153,6 +153,11 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
     private final Map<String, String> selectedPartsByReplay = new HashMap<>();
     private String selectedPart = "";
 
+    /* A bone picked with no pose keyframe at the cursor: the gizmo goes to it right away, the
+     * keyframe is only created once the bone is actually moved (see commitPendingPose) */
+    private String pendingPoseSheet;
+    private String pendingPoseBone;
+
     public static Icon getIcon(String key)
     {
         return TrackStyle.icon(key);
@@ -496,6 +501,8 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         }
 
         this.settingReplay = true;
+        this.pendingPoseSheet = null;
+        this.pendingPoseBone = null;
 
         try
         {
@@ -1031,6 +1038,9 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
             return;
         }
 
+        this.pendingPoseSheet = null;
+        this.pendingPoseBone = null;
+
         this.selectBodyPart(FormUtils.getPath(form));
 
         if (!(form instanceof IPosedForm) || (bone != null && !bone.isEmpty()))
@@ -1046,6 +1056,57 @@ public class UIReplaysEditor extends UIElement implements IBoneSelectionHost
         }
 
         UIReplaysEditorUtils.pickForm(this.keyframeEditor, this.filmPanel, form, bone, insert);
+
+        UIKeyframeSheet pending = insert ? null : UIReplaysEditorUtils.findPoseSheetWithoutKeyframe(this.keyframeEditor, this.filmPanel, form, bone);
+
+        if (pending != null)
+        {
+            this.keyframeEditor.view.getGraph().clearSelection();
+            this.boneSelection.set(bone);
+            this.pendingPoseSheet = pending.id;
+            this.pendingPoseBone = bone;
+        }
+    }
+
+    private UIKeyframeSheet getPendingPoseSheet()
+    {
+        if (this.pendingPoseSheet == null || this.keyframeEditor == null || this.keyframeEditor.editor != null)
+        {
+            return null;
+        }
+
+        UIKeyframeSheet sheet = this.keyframeEditor.view.getGraph().getSheet(this.pendingPoseSheet);
+
+        return sheet;
+    }
+
+    /** The pending bone as the gizmo addresses it (form path + bone), or null when there is none. */
+    public String getPendingPoseBone()
+    {
+        UIKeyframeSheet sheet = this.getPendingPoseSheet();
+
+        if (sheet == null)
+        {
+            return null;
+        }
+
+        int i = sheet.id.lastIndexOf('/');
+
+        return i >= 0 ? sheet.id.substring(0, i + 1) + this.pendingPoseBone : this.pendingPoseBone;
+    }
+
+    /** Something is about to move the pending bone: create its pose keyframe at the film's cursor. */
+    public void commitPendingPose(float transition)
+    {
+        UIKeyframeSheet sheet = this.getPendingPoseSheet();
+
+        if (sheet != null)
+        {
+            UIReplaysEditorUtils.insertIntoPropertySheet(this.keyframeEditor, this.pendingPoseBone, sheet, this.filmPanel.getKeyframeCursor(transition));
+        }
+
+        this.pendingPoseSheet = null;
+        this.pendingPoseBone = null;
     }
 
     public boolean clickViewport(UIContext context, Area area)

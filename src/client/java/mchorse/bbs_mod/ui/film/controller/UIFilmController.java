@@ -1015,8 +1015,16 @@ public class UIFilmController extends UIElement implements GizmoViewport
     public Pair<String, TransformSpace> getBone()
     {
         UIKeyframeEditor keyframeEditor = this.panel.replayEditor.keyframeEditor;
+        Pair<String, TransformSpace> bone = keyframeEditor != null ? keyframeEditor.getBone() : null;
 
-        return keyframeEditor != null ? keyframeEditor.getBone() : null;
+        if (bone == null)
+        {
+            String pending = this.panel.replayEditor.getPendingPoseBone();
+
+            return pending == null ? null : new Pair<>(pending, TransformSpace.LOCAL);
+        }
+
+        return bone;
     }
 
     /** Whether the selected keyframe is the form's anchor track, so its transform gets a gizmo. */

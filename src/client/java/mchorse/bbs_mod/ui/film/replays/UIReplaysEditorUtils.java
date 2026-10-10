@@ -329,6 +329,9 @@ public class UIReplaysEditorUtils
             return false;
         }
 
+        /* A bone picked on an empty pose track gets its keyframe only now that it is moved */
+        panel.replayEditor.commitPendingPose(gizmoTransition);
+
         UIPropTransform transform = getFilmGizmoTransform(panel, gizmoTransition);
         GizmoDrag drag = buildFilmGizmoDrag(
             panel,
@@ -730,19 +733,26 @@ public class UIReplaysEditorUtils
             {
                 return;
             }
-            if (isPoseSheet(currentSheet, path))
+
+            UIKeyframeSheet poseSheet = getPickedPoseSheet(keyframeEditor, currentSheet, boneKey, path);
+
+            if (poseSheet != null)
             {
-                float tick = keyframeEditor.view.getTick();
-                Keyframe closest = getClosestKeyframe(currentSheet, tick);
-                if (closest != null)
+                /* Pose tracks are picked at the cursor, never at the closest keyframe: with no
+                 * keyframe there the replay editor keeps the bone pending and the keyframe is
+                 * created at the cursor once the bone is moved (see findPoseSheetWithoutKeyframe) */
+                Keyframe atCursor = getKeyframeAt(poseSheet, cursor.getKeyframeCursor(0F));
+
+                if (atCursor != null)
                 {
-                    if (currentSheet.selection.getSelected().size() <= 1)
+                    if (poseSheet.selection.getSelected().size() <= 1)
                     {
-                        forceSelectInSheet(graph, currentSheet, closest);
+                        forceSelectInSheet(graph, poseSheet, atCursor);
                     }
-                    cursor.setCursor(closest.getTick());
+
+                    updatePoseEditorBoneSelection(keyframeEditor, bone);
                 }
-                updatePoseEditorBoneSelection(keyframeEditor, bone);
+
                 return;
             }
         }
@@ -786,6 +796,39 @@ public class UIReplaysEditorUtils
         {
             pickProperty(keyframeEditor, cursor, bone, sheet, false);
         }
+    }
+
+    /** The pose track a bone click lands on: the selected one, else the one the bone resolves to. */
+    private static UIKeyframeSheet getPickedPoseSheet(UIKeyframeEditor keyframeEditor, UIKeyframeSheet currentSheet, String boneKey, String path)
+    {
+        if (isPoseSheet(currentSheet, path))
+        {
+            return currentSheet;
+        }
+
+        UIKeyframeSheet sheet = resolveBoneSheet(keyframeEditor, boneKey, path);
+
+        return isPoseSheet(sheet, path) ? sheet : null;
+    }
+
+    /**
+     * The pose track a click on this bone lands on, when it has no keyframe at the cursor - so
+     * there is nothing to select and the keyframe has to be created once the bone is moved.
+     */
+    public static UIKeyframeSheet findPoseSheetWithoutKeyframe(UIKeyframeEditor keyframeEditor, ICursor cursor, Form form, String bone)
+    {
+        if (keyframeEditor == null || !(form instanceof IPosedForm) || bone == null || bone.isEmpty())
+        {
+            return null;
+        }
+
+        String path = FormUtils.getPath(form);
+        IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
+        Keyframe selected = graph.getSelected();
+        UIKeyframeSheet currentSheet = selected != null ? graph.getSheet(selected) : null;
+        UIKeyframeSheet sheet = getPickedPoseSheet(keyframeEditor, currentSheet, TrackId.bone(path, bone).toKey(), path);
+
+        return sheet != null && getKeyframeAt(sheet, cursor.getKeyframeCursor(0F)) == null ? sheet : null;
     }
 
     private static UIKeyframeSheet resolveBoneSheet(UIKeyframeEditor keyframeEditor, String boneKey, String formPath)
@@ -935,8 +978,12 @@ public class UIReplaysEditorUtils
      */
     private static void insertIntoPropertySheet(UIKeyframeEditor keyframeEditor, String bone, UIKeyframeSheet sheet)
     {
+        insertIntoPropertySheet(keyframeEditor, bone, sheet, keyframeEditor.view.getTick());
+    }
+
+    public static void insertIntoPropertySheet(UIKeyframeEditor keyframeEditor, String bone, UIKeyframeSheet sheet, float tick)
+    {
         IUIKeyframeGraph graph = keyframeEditor.view.getGraph();
-        float tick = keyframeEditor.view.getTick();
         Keyframe existing = getKeyframeAt(sheet, tick);
 
         if (existing != null)
