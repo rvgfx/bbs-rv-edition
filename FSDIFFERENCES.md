@@ -23,6 +23,7 @@ BBS RV Edition is a personal fork of BBS FS that merges features from BBS CML Ed
 - **Dynamic `play_state` Distance Range** — the model block activation radius is now a configurable setting instead of a hardcoded command argument
 - **Asynchronous Video Writer** — frames are handed to ffmpeg on a separate thread through a small bounded queue, so the render thread no longer stalls on the pipe and memory stays flat on long exports
 - **GPU Color Conversion** — frames are converted to YUV 4:2:0 (BT.709) and flipped in a shader before read-back, halving the data sent to ffmpeg and removing its CPU-side conversion
+- **Per-Axis Camera Shake** — the Shake clip can give every component (X, Y, Z, yaw, pitch, roll, FOV) its own amplitude and frequency in Hz, shake the position in camera space (right, up, forward) instead of world axes, and take a seed so two shakes don't move the same way. Noise can be layered over several octaves with a roughness control for a more organic shake, a decay fades it out from the start of the clip for hits and explosions, and presets (Handheld, Explosion, Earthquake, Vehicle) fill everything in with one click. A graph in the panel previews the shake over the whole clip, one line per component, so it can be tuned without playing the film. With per axis off and the new settings at their defaults it behaves exactly as before
 
 ### Now Default in BBS FS (no longer exclusive)
 - **Show Disabled Bones in Model Editor** — was added upstream; no longer a RV-specific feature
