@@ -23,7 +23,9 @@ import org.joml.Vector3f;
  * camera someone is holding.</p>
  *
  * <p>With per axis on, every component gets its own amplitude and frequency (Hz) instead.
- * Local moves the position in camera space (right, up, forward) rather than world axes.</p>
+ * Local moves the position in camera space (right, up, forward) rather than world axes.
+ * Octaves and roughness layer finer noise on top, and decay fades the shake out from the
+ * clip's start.</p>
  */
 public class ShakeClip extends ComponentClip
 {
@@ -35,6 +37,9 @@ public class ShakeClip extends ComponentClip
     public final ValueBoolean perAxis = new ValueBoolean("perAxis", false);
     public final ValueBoolean local = new ValueBoolean("local", false);
     public final ValueInt seed = new ValueInt("seed", 0);
+    public final ValueInt octaves = new ValueInt("octaves", 1, 1, 4);
+    public final ValueFloat roughness = new ValueFloat("roughness", 0.5F, 0F, 1F);
+    public final ValueFloat decay = new ValueFloat("decay", 0F, 0F, 100F);
     public final ValueFloat[] amplitudes = new ValueFloat[AXES.length];
     public final ValueFloat[] frequencies = new ValueFloat[AXES.length];
 
@@ -48,6 +53,9 @@ public class ShakeClip extends ComponentClip
         this.add(this.perAxis);
         this.add(this.local);
         this.add(this.seed);
+        this.add(this.octaves);
+        this.add(this.roughness);
+        this.add(this.decay);
 
         for (int i = 0; i < AXES.length; i++)
         {
@@ -65,17 +73,9 @@ public class ShakeClip extends ComponentClip
     @Override
     public void applyClip(ClipContext context, Position position)
     {
-        float time = context.ticks + context.transition;
         float[] offsets = new float[7];
 
-        if (this.perAxis.get())
-        {
-            this.perAxisOffsets(time / 20F, offsets);
-        }
-        else
-        {
-            this.legacyOffsets(time, offsets);
-        }
+        this.getOffsets(context.ticks + context.transition, context.relativeTick + context.transition, offsets);
 
         if (this.local.get())
         {
@@ -104,6 +104,36 @@ public class ShakeClip extends ComponentClip
     }
 
     /**
+     * How far every component is pushed at the given tick of the film, and of the clip, in
+     * the order of {@link #AXES}. Position offsets are in the clip's space (world or camera).
+     * Shared with the panel's preview graph, so the two can't disagree.
+     */
+    public void getOffsets(float ticks, float relative, float[] offsets)
+    {
+        if (this.perAxis.get())
+        {
+            this.perAxisOffsets(ticks / 20F, offsets);
+        }
+        else
+        {
+            this.legacyOffsets(ticks, offsets);
+        }
+
+        float decay = this.decay.get();
+
+        if (decay > 0F)
+        {
+            /* Strongest at the clip's start and dying out, for hits and explosions */
+            float factor = (float) Math.exp(-decay * relative / 20F);
+
+            for (int i = 0; i < offsets.length; i++)
+            {
+                offsets[i] *= factor;
+            }
+        }
+    }
+
+    /**
      * Every component on its own amplitude and frequency (in Hz). Sine axes get a phase of
      * their own off the seed, so equal frequencies don't move in lock-step.
      */
@@ -126,7 +156,7 @@ public class ShakeClip extends ComponentClip
             {
                 /* A sine turns around 2 * f times a second and noise every second cell,
                  * so 4 * f cells a second keeps both at the same speed */
-                wave = noise(seconds * frequency * 4F, i + seed * 7);
+                wave = this.fractal(seconds * frequency * 4F, i + seed * 7);
             }
             else
             {
@@ -162,7 +192,7 @@ public class ShakeClip extends ComponentClip
             {
                 if (this.isActive(i))
                 {
-                    offsets[i] = noise(n, i + seed * 7) * amount;
+                    offsets[i] = this.fractal(n, i + seed * 7) * amount;
                 }
             }
 
@@ -189,6 +219,30 @@ public class ShakeClip extends ComponentClip
                 offsets[i] = waves[i] * amount;
             }
         }
+    }
+
+    /**
+     * Noise layered over a few octaves, each twice as fast and roughness times as strong as
+     * the one before. Divided by the total weight so the amplitude still means the peak.
+     * One octave is plain {@link #noise(float, int)}.
+     */
+    private float fractal(float x, int channel)
+    {
+        int octaves = this.octaves.get();
+        float roughness = this.roughness.get();
+        float sum = 0F;
+        float total = 0F;
+        float weight = 1F;
+
+        for (int i = 0; i < octaves; i++)
+        {
+            sum += noise(x, channel + i * 1013) * weight;
+            total += weight;
+            x *= 2F;
+            weight *= roughness;
+        }
+
+        return sum / total;
     }
 
     /**
