@@ -6,6 +6,8 @@ import mchorse.bbs_mod.BBSSettings;
 import mchorse.bbs_mod.camera.clips.CameraClip;
 import mchorse.bbs_mod.camera.clips.ClipFactoryData;
 import mchorse.bbs_mod.camera.clips.converters.IClipConverter;
+import mchorse.bbs_mod.camera.clips.modifiers.LookClip;
+import mchorse.bbs_mod.camera.clips.overwrite.IdleClip;
 import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.utils.TimeUtils;
 import mchorse.bbs_mod.data.types.BaseType;
@@ -26,6 +28,8 @@ import mchorse.bbs_mod.ui.film.clips.renderer.IUIClipRenderer;
 import mchorse.bbs_mod.ui.film.clips.renderer.UIClipRenderers;
 import mchorse.bbs_mod.ui.film.markers.UIMarkerOverlayPanel;
 import mchorse.bbs_mod.ui.film.markers.UIMarkersController;
+import mchorse.bbs_mod.ui.film.utils.TracksideGenerator;
+import mchorse.bbs_mod.ui.film.utils.UITracksideOverlayPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.framework.elements.buttons.UIIcon;
@@ -266,6 +270,7 @@ public class UIClips extends UITimelineCanvas
             if (this.factory.getKeys().contains(Link.bbs("keyframe")))
             {
                 add.action(Icons.EDITOR, UIKeys.CAMERA_TIMELINE_CONTEXT_FROM_PLAYER_RECORDING, () -> this.fromReplay(mouseX, mouseY));
+                add.action(Icons.CAMERA, UIKeys.CAMERA_TIMELINE_CONTEXT_TRACKSIDE, () -> this.trackside(mouseY));
             }
         });
     }
@@ -610,6 +615,83 @@ public class UIClips extends UITimelineCanvas
                 });
             }
         });
+    }
+
+    /**
+     * Pick a replay and the settings, then preview trackside idle cameras along
+     * its path in the viewport; once generated, they are added along with a
+     * look clip on top aiming at the replay.
+     */
+    private void trackside(int mouseY)
+    {
+        UIFilmPanel panel = this.getParent(UIFilmPanel.class);
+        int layer = Math.max(this.fromLayerY(mouseY), 0);
+
+        if (panel == null)
+        {
+            return;
+        }
+
+        this.getContext().replaceContextMenu((menu) ->
+        {
+            for (Replay replay : panel.getData().replays.getList())
+            {
+                menu.action(Icons.EDITOR, IKey.raw(replay.getName()), () ->
+                {
+                    int cursor = this.delegate.getCursor();
+                    int length = Math.max((int) replay.getLastKeyframeTick() - cursor, 1);
+
+                    UIOverlay.addOverlay(this.getContext(), new UITracksideOverlayPanel(cursor, length, (settings) ->
+                    {
+                        if (replay.getLastKeyframeTick() < settings.start)
+                        {
+                            this.getContext().notifyError(UIKeys.CAMERA_TRACKSIDE_NO_MOTION);
+
+                            return;
+                        }
+
+                        panel.getController().trackside.open(replay, settings, (idles) -> this.addTrackside(replay, layer, idles));
+                    }), 240, 300);
+                });
+            }
+        });
+    }
+
+    private void addTrackside(Replay replay, int layer, List<IdleClip> idles)
+    {
+        if (idles.isEmpty())
+        {
+            return;
+        }
+
+        int start = idles.get(0).tick.get();
+        IdleClip last = idles.get(idles.size() - 1);
+        int top = layer;
+
+        this.clearSelection();
+
+        for (IdleClip idle : idles)
+        {
+            idle.layer.set(layer);
+            idle.layer.set(this.clips.findFreeLayer(idle));
+            top = Math.max(top, idle.layer.get());
+
+            this.clips.addClip(idle);
+            this.addSelected(idle);
+        }
+
+        LookClip look = new LookClip();
+
+        look.selector.set(replay.getId());
+        look.offset.get().set(0D, TracksideGenerator.TARGET_HEIGHT, 0D);
+        look.tick.set(start);
+        look.duration.set(last.tick.get() + last.duration.get() - start);
+        look.layer.set(top + 1);
+        look.layer.set(this.clips.findFreeLayer(look));
+
+        this.clips.addClip(look);
+        this.addSelected(look);
+        this.pickLastSelectedClip();
     }
 
     /**
