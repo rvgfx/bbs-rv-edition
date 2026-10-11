@@ -265,7 +265,7 @@ public class MotionPath
      * since the coordinates are camera-relative), so the ribbon always faces the
      * camera. Its width is distance-scaled to stay a constant on-screen size.
      */
-    private static void ribbon(BufferBuilder builder, Matrix4f matrix, Vector3d a, Vector3d b, float[] colorA, float[] colorB, float halfWidth)
+    static void ribbon(BufferBuilder builder, Matrix4f matrix, Vector3d a, Vector3d b, float[] colorA, float[] colorB, float halfWidth)
     {
         double dx = b.x - a.x;
         double dy = b.y - a.y;
