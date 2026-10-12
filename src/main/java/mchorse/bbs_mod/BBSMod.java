@@ -50,6 +50,7 @@ import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.clips.overwrite.PathClip;
 import mchorse.bbs_mod.camera.clips.screen.CinematicClip;
 import mchorse.bbs_mod.camera.clips.screen.ColorClip;
+import mchorse.bbs_mod.camera.clips.screen.DepthOfFieldClip;
 import mchorse.bbs_mod.camera.clips.screen.GrainClip;
 import mchorse.bbs_mod.entity.ActorEntity;
 import mchorse.bbs_mod.entity.GunProjectileEntity;
@@ -507,7 +508,8 @@ public class BBSMod implements ModInitializer
             .register(Link.bbs("dolly_zoom"), DollyZoomClip.class, new ClipFactoryData(Icons.FILTER, 0x7d56c9))
             .register(Link.bbs("color"), ColorClip.class, new ClipFactoryData(Icons.FILTER, 0xff6633))
             .register(Link.bbs("cinematic"), CinematicClip.class, new ClipFactoryData(Icons.VIDEO_CAMERA, 0xffaa00))
-            .register(Link.bbs("grain"), GrainClip.class, new ClipFactoryData(Icons.FIVE_STAR, 0x887766));
+            .register(Link.bbs("grain"), GrainClip.class, new ClipFactoryData(Icons.FIVE_STAR, 0x887766))
+            .register(Link.bbs("depth_of_field"), DepthOfFieldClip.class, new ClipFactoryData(Icons.VISIBLE, 0x44aadd));
 
         events.post(new RegisterCameraClipsEvent(factoryCameraClips));
 

@@ -212,6 +212,7 @@ public class UIKeys
     public static final IKey CAMERA_PANELS_PLACEMENT_SCALE_SHIFT = L10n.lang("bbs.ui.camera.panels.placement.scale-shift");
     public static final IKey CAMERA_PANELS_TARGET = L10n.lang("bbs.ui.camera.panels.target");
     public static final IKey CAMERA_PANELS_TARGET_TITLE = L10n.lang("bbs.ui.camera.panels.target-title");
+    public static final IKey CAMERA_DOF_TARGET_TOOLTIP = L10n.lang("bbs.ui.camera.panels.dof_target-tooltip");
     public static final IKey CAMERA_PANELS_TARGET_TOOLTIP = L10n.lang("bbs.ui.camera.panels.target-tooltip");
     public static final IKey CAMERA_PANELS_TICK = L10n.lang("bbs.ui.camera.panels.tick");
     public static final IKey CAMERA_PANELS_TITLE = L10n.lang("bbs.ui.camera.panels.title");
@@ -230,6 +231,14 @@ public class UIKeys
     public static final IKey CAMERA_TIMELINE_CONTEXT_CUT = L10n.lang("bbs.ui.camera.timeline.context.cut");
     public static final IKey CAMERA_TIMELINE_CONTEXT_FROM_PLAYER_RECORDING = L10n.lang("bbs.ui.camera.timeline.context.from_player_recording");
     public static final IKey CAMERA_TIMELINE_CONTEXT_TRACKSIDE = L10n.lang("bbs.ui.camera.timeline.context.trackside");
+    public static final IKey CAMERA_TIMELINE_CONTEXT_RIG = L10n.lang("bbs.ui.camera.timeline.context.rig");
+    public static final IKey CAMERA_RIG_ORBIT = L10n.lang("bbs.ui.camera.rig.orbit");
+    public static final IKey CAMERA_RIG_CRANE = L10n.lang("bbs.ui.camera.rig.crane");
+    public static final IKey CAMERA_RIG_FOLLOW = L10n.lang("bbs.ui.camera.rig.follow");
+    public static final IKey CAMERA_RIG_DESCRIPTION = L10n.lang("bbs.ui.camera.rig.description");
+    public static final IKey CAMERA_RIG_DISTANCE = L10n.lang("bbs.ui.camera.rig.distance");
+    public static final IKey CAMERA_RIG_HEIGHT = L10n.lang("bbs.ui.camera.rig.height");
+    public static final IKey CAMERA_RIG_ROTATION = L10n.lang("bbs.ui.camera.rig.rotation");
     public static final IKey CAMERA_TRACKSIDE_TITLE = L10n.lang("bbs.ui.camera.trackside.title");
     public static final IKey CAMERA_TRACKSIDE_DESCRIPTION = L10n.lang("bbs.ui.camera.trackside.description");
     public static final IKey CAMERA_TRACKSIDE_CAMERAS = L10n.lang("bbs.ui.camera.trackside.cameras");
@@ -367,6 +376,7 @@ public class UIKeys
     public static final IKey FILM_MARKERS_ADD = L10n.lang("bbs.ui.film.markers.add");
     public static final IKey FILM_MARKERS_COLOR = L10n.lang("bbs.ui.film.markers.color");
     public static final IKey FILM_MARKERS_DURATION = L10n.lang("bbs.ui.film.markers.duration");
+    public static final IKey FILM_MARKERS_EXPORT = L10n.lang("bbs.ui.film.markers.export");
     public static final IKey FILM_MARKERS_EDIT = L10n.lang("bbs.ui.film.markers.edit");
     public static final IKey FILM_MARKERS_KEYS_ADD = L10n.lang("bbs.ui.film.markers.keys.add");
     public static final IKey FILM_MARKERS_KEYS_NEXT = L10n.lang("bbs.ui.film.markers.keys.next");

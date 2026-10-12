@@ -9,6 +9,7 @@ import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
 import mchorse.bbs_mod.ui.utils.Area;
 import mchorse.bbs_mod.ui.utils.UIUtils;
+import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -78,6 +79,19 @@ public class UIFilmRecorder extends UIElement
         }
 
         this.session.start(duration, id, w, h);
+    }
+
+    /**
+     * Records only the given tick range instead of the whole film or the loop.
+     */
+    public void startRecording(Vector2i range, int id, int w, int h)
+    {
+        if (this.editor.isRunning() || range.y <= range.x)
+        {
+            return;
+        }
+
+        this.session.start(range.y, range, id, w, h);
     }
 
     /**

@@ -8,6 +8,7 @@ import mchorse.bbs_mod.camera.controller.ICameraController;
 import mchorse.bbs_mod.camera.controller.PlayCameraController;
 import mchorse.bbs_mod.client.BBSRendering;
 import mchorse.bbs_mod.client.PixelArt;
+import mchorse.bbs_mod.client.screen.DepthOfFieldRenderer;
 import mchorse.bbs_mod.items.GunZoom;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.ShaderProgram;
@@ -178,6 +179,26 @@ public class GameRendererMixin
         }
 
         return ortho;
+    }
+
+    /**
+     * The depth buffer is cleared for the hand right after this, so the depth of field pass has
+     * to grab it here. Only while a film is being played or edited, where the pass can run.
+     */
+    @Inject(
+        method = "renderWorld",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/render/WorldRenderer;render(Lnet/minecraft/client/util/math/MatrixStack;FJZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;)V",
+            shift = At.Shift.AFTER
+        )
+    )
+    private void onWorldRendered(CallbackInfo info)
+    {
+        if (BBSModClient.getCameraController().getCurrent() instanceof PlayCameraController || BBSRendering.isCustomSize())
+        {
+            DepthOfFieldRenderer.captureDepth();
+        }
     }
 
     @Inject(at = @At("RETURN"), method = "renderWorld")

@@ -40,6 +40,7 @@ import mchorse.bbs_mod.camera.clips.overwrite.KeyframeClip;
 import mchorse.bbs_mod.camera.clips.overwrite.PathClip;
 import mchorse.bbs_mod.camera.clips.screen.CinematicClip;
 import mchorse.bbs_mod.camera.clips.screen.ColorClip;
+import mchorse.bbs_mod.camera.clips.screen.DepthOfFieldClip;
 import mchorse.bbs_mod.camera.clips.screen.GrainClip;
 import mchorse.bbs_mod.camera.data.Placement;
 import mchorse.bbs_mod.camera.data.Position;
@@ -141,6 +142,7 @@ public abstract class UIClip <T extends Clip> extends UIElement
         register(ColorClip.class, UIColorClip::new);
         register(CinematicClip.class, (clip, editor) -> new UIScreenEffectClip<>(clip, editor, clip.channels, "cinematic"));
         register(GrainClip.class, (clip, editor) -> new UIScreenEffectClip<>(clip, editor, clip.channels, "grain"));
+        register(DepthOfFieldClip.class, UIDepthOfFieldClip::new);
         register(ImageClip.class, UIImageClip::new);
         register(CurveClientClip.class, UICurveClip::new);
         register(DollyZoomClip.class, UIDollyZoomClip::new);
