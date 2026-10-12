@@ -988,6 +988,7 @@
 	"bbs.ui.film.insert_space-title": "Insert space",
 	"bbs.ui.film.markers.add": "Add marker",
 	"bbs.ui.film.markers.color": "Color",
+	"bbs.ui.film.markers.duration": "Duration",
 	"bbs.ui.film.markers.edit": "Edit marker",
 	"bbs.ui.film.markers.keys.add": "Add marker at cursor",
 	"bbs.ui.film.markers.keys.next": "Jump to next marker",

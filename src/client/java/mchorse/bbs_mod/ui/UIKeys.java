@@ -366,6 +366,7 @@ public class UIKeys
     public static final IKey FILM_INSERT_SPACE_TITLE = L10n.lang("bbs.ui.film.insert_space-title");
     public static final IKey FILM_MARKERS_ADD = L10n.lang("bbs.ui.film.markers.add");
     public static final IKey FILM_MARKERS_COLOR = L10n.lang("bbs.ui.film.markers.color");
+    public static final IKey FILM_MARKERS_DURATION = L10n.lang("bbs.ui.film.markers.duration");
     public static final IKey FILM_MARKERS_EDIT = L10n.lang("bbs.ui.film.markers.edit");
     public static final IKey FILM_MARKERS_KEYS_ADD = L10n.lang("bbs.ui.film.markers.keys.add");
     public static final IKey FILM_MARKERS_KEYS_NEXT = L10n.lang("bbs.ui.film.markers.keys.next");

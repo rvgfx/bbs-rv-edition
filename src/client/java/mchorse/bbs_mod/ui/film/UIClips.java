@@ -1216,10 +1216,21 @@ public class UIClips extends UITimelineCanvas
         }
 
         int tick = this.markers.getDragTick();
+        boolean end = this.markers.isDraggingEnd();
 
         this.markers.stopDrag();
 
-        if (tick != marker.tick.get())
+        if (end)
+        {
+            int duration = Math.max(0, tick - marker.tick.get());
+
+            if (duration != marker.duration.get())
+            {
+                this.delegate.markLastUndoNoMerging();
+                marker.duration.set(duration);
+            }
+        }
+        else if (tick != marker.tick.get())
         {
             this.delegate.markLastUndoNoMerging();
             marker.tick.set(tick);
@@ -1396,6 +1407,11 @@ public class UIClips extends UITimelineCanvas
                     for (FilmMarker marker : filmMarkers.getList())
                     {
                         this.snappingPoints.add(marker.tick.get());
+
+                        if (marker.duration.get() > 0)
+                        {
+                            this.snappingPoints.add(marker.tick.get() + marker.duration.get());
+                        }
                     }
                 }
 
@@ -1435,6 +1451,17 @@ public class UIClips extends UITimelineCanvas
                 this.markers.beginDrag(marker);
                 this.delegate.stopPlaybackOnScrub();
                 this.delegate.setCursor(marker.tick.get());
+                this.setMouse(mouseX, mouseY);
+
+                return true;
+            }
+
+            /* The end of a duration band only gets the click when no marker sits on it */
+            FilmMarker end = this.hasEmbeddedView() ? null : this.markers.getMarkerEndAt(this.area, this.xAxis, mouseX, mouseY, 0);
+
+            if (end != null)
+            {
+                this.markers.beginDragEnd(end);
                 this.setMouse(mouseX, mouseY);
 
                 return true;

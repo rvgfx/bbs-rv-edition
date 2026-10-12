@@ -23,6 +23,7 @@ public class UIMarkerOverlayPanel extends UIOverlayPanel
     public UITextbox title;
     public UIColor color;
     public UITrackpad tick;
+    public UITrackpad duration;
     public UIButton remove;
 
     private final FilmMarkers markers;
@@ -46,6 +47,10 @@ public class UIMarkerOverlayPanel extends UIOverlayPanel
         this.tick.limit(0, Integer.MAX_VALUE, true);
         this.tick.valueBinding(() -> this.tick.setValue(this.marker.tick.get()));
 
+        this.duration = new UITrackpad((value) -> this.marker.duration.set((int) Math.round(value)));
+        this.duration.limit(0, Integer.MAX_VALUE, true);
+        this.duration.valueBinding(() -> this.duration.setValue(this.marker.duration.get()));
+
         this.remove = new UIButton(UIKeys.FILM_MARKERS_REMOVE, (b) ->
         {
             this.markers.remove(this.marker);
@@ -57,6 +62,8 @@ public class UIMarkerOverlayPanel extends UIOverlayPanel
             this.title,
             UI.label(UIKeys.FILM_MARKERS_TICK).marginTop(6),
             this.tick,
+            UI.label(UIKeys.FILM_MARKERS_DURATION).marginTop(6),
+            this.duration,
             UI.label(UIKeys.FILM_MARKERS_COLOR).marginTop(6),
             this.color,
             this.remove.marginTop(10)
