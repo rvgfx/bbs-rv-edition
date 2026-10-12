@@ -87,6 +87,8 @@ public class UIFilmPreview extends UIElement
 
     /** The side of the axes crosshair's block, matching {@link RenderSystem#renderCrosshair}'s reach. */
     private static final int CURSOR_SIZE = 24;
+    /** Width / height per aspect guide mode, matching the labels in BBSModClient; 0 is off. */
+    private static final float[] ASPECT_GUIDES = {0F, 2.39F, 2F, 1.85F, 4F / 3F, 1F, 9F / 16F};
 
     /** Everything drawn over the frame goes through here - see {@link PreviewHud}. */
     private final PreviewHud hud = new PreviewHud();
@@ -199,20 +201,7 @@ public class UIFilmPreview extends UIElement
 
             menu.action(Icons.MOVE_TO, UIKeys.FILM_REPLAY_TELEPORT_TO_PLAYER, () -> this.panel.getController().keyframes.insertPlayerFrame());
         });
-        this.recordVideo = new UIIcon(Icons.VIDEO_CAMERA, (b) ->
-        {
-            if (!this.canExport())
-            {
-                return;
-            }
-
-            int duration = this.panel.getData().camera.calculateDuration();
-            UIFilmPanel.applyExportSizeToBBS();
-            BBSRendering.scheduleAfterNextExportFrame(() ->
-            {
-                this.panel.recorder.startRecording(duration, BBSRendering.getTexture().id, BBSRendering.getVideoWidth(), BBSRendering.getVideoHeight());
-            });
-        });
+        this.recordVideo = new UIIcon(Icons.VIDEO_CAMERA, (b) -> this.exportVideo(null));
         this.recordVideo.tooltip(UIKeys.CAMERA_TOOLTIPS_RECORD);
         this.recordVideo.context((menu) ->
         {
@@ -308,6 +297,88 @@ public class UIFilmPreview extends UIElement
      * Whether an export can start at all: there has to be a camera, and ffmpeg has to be
      * installed. Both refusals say so on screen, ffmpeg's with a link to the guide.
      */
+    /**
+     * Editor-only framing aids: bars masking everything outside the chosen aspect ratio, and the
+     * broadcast action (90%) and title (80%) safe areas inside what is left. None of it is exported.
+     */
+    private void renderFramingGuides(UIContext context, Area area)
+    {
+        int mode = BBSSettings.editorAspectGuide.get();
+        int x1 = area.x;
+        int y1 = area.y;
+        int x2 = area.ex();
+        int y2 = area.ey();
+
+        if (mode > 0 && mode < ASPECT_GUIDES.length)
+        {
+            float ratio = ASPECT_GUIDES[mode];
+            int bars = Colors.setA(0, 0.85F);
+
+            if (ratio > area.w / (float) area.h)
+            {
+                int h = Math.round(area.w / ratio);
+
+                y1 = area.y + (area.h - h) / 2;
+                y2 = y1 + h;
+
+                context.batcher.box(area.x, area.y, area.ex(), y1, bars);
+                context.batcher.box(area.x, y2, area.ex(), area.ey(), bars);
+            }
+            else
+            {
+                int w = Math.round(area.h * ratio);
+
+                x1 = area.x + (area.w - w) / 2;
+                x2 = x1 + w;
+
+                context.batcher.box(area.x, area.y, x1, area.ey(), bars);
+                context.batcher.box(x2, area.y, area.ex(), area.ey(), bars);
+            }
+        }
+
+        if (BBSSettings.editorSafeArea.get())
+        {
+            int color = BBSSettings.editorGuidesColor.get();
+
+            for (float scale : new float[] {0.9F, 0.8F})
+            {
+                int dx = Math.round((x2 - x1) * (1F - scale) / 2F);
+                int dy = Math.round((y2 - y1) * (1F - scale) / 2F);
+
+                context.batcher.outline(x1 + dx, y1 + dy, x2 - dx, y2 - dy, color);
+            }
+        }
+    }
+
+    /**
+     * @param range Tick range to record (e.g. a marker's), or null for the whole film / loop.
+     */
+    public void exportVideo(Vector2i range)
+    {
+        if (!this.canExport())
+        {
+            return;
+        }
+
+        int duration = this.panel.getData().camera.calculateDuration();
+        UIFilmPanel.applyExportSizeToBBS();
+        BBSRendering.scheduleAfterNextExportFrame(() ->
+        {
+            int id = BBSRendering.getTexture().id;
+            int w = BBSRendering.getVideoWidth();
+            int h = BBSRendering.getVideoHeight();
+
+            if (range == null)
+            {
+                this.panel.recorder.startRecording(duration, id, w, h);
+            }
+            else
+            {
+                this.panel.recorder.startRecording(range, id, w, h);
+            }
+        });
+    }
+
     private boolean canExport()
     {
         if (this.panel.checkShowNoCamera())
@@ -459,6 +530,8 @@ public class UIFilmPreview extends UIElement
         {
             context.batcher.texturedBox(texture.id, Colors.WHITE, area.x, area.y, area.w, area.h, 0, texture.height, texture.width, 0, texture.width, texture.height);
         }
+
+        this.renderFramingGuides(context, area);
 
         this.hud.begin(area);
         this.hud.reserve(PreviewHud.Anchor.BOTTOM_CENTER, area.ey() - this.icons.area.y);

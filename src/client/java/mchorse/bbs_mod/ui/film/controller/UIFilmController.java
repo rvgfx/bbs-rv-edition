@@ -108,6 +108,7 @@ public class UIFilmController extends UIElement implements GizmoViewport
     /** What the editor draws over the preview. */
     private final FilmControllerHud hud = new FilmControllerHud(this);
     public final TracksidePreview trackside;
+    public final CameraRigPreview rig;
 
     /** The mouse while an actor is driven by hand: look around, or a gamepad stick. */
     public final ActorMouseControl mouse = new ActorMouseControl();
@@ -214,6 +215,10 @@ public class UIFilmController extends UIElement implements GizmoViewport
         this.trackside = new TracksidePreview(this);
         this.addonTools.add(this.trackside);
         this.add(this.trackside);
+
+        this.rig = new CameraRigPreview(this);
+        this.addonTools.add(this.rig);
+        this.add(this.rig);
 
         for (var factory : TOOL_FACTORIES)
         {

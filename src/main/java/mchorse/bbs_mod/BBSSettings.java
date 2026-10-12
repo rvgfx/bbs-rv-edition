@@ -156,6 +156,8 @@ public class BBSSettings {
 	public static ValueBoolean editorRuleOfThirds;
 	public static ValueBoolean editorCenterLines;
 	public static ValueBoolean editorCrosshair;
+	public static ValueInt editorAspectGuide;
+	public static ValueBoolean editorSafeArea;
 	public static ValueBoolean editorSeconds;
 	public static ValueBoolean editorTimelineGrid;
 	public static ValueInt editorPeriodicSave;
@@ -783,6 +785,8 @@ public class BBSSettings {
 		editorRuleOfThirds = builder.getBoolean("rule_of_thirds", false);
 		editorCenterLines = builder.getBoolean("center_lines", false);
 		editorCrosshair = builder.getBoolean("crosshair", false);
+		editorAspectGuide = builder.getInt("aspect_guide", 0, 0, 6);
+		editorSafeArea = builder.getBoolean("safe_area", false);
 		editorPreviewSizeMode = builder.getInt("preview_size_mode", 2, 0, 2);
 		editorPreviewCustomWidth = builder.getInt("preview_custom_width", 1280, 2, 16384);
 		editorPreviewCustomHeight = builder.getInt("preview_custom_height", 720, 2, 16384);

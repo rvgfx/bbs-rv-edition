@@ -28,7 +28,9 @@ import mchorse.bbs_mod.ui.film.clips.renderer.IUIClipRenderer;
 import mchorse.bbs_mod.ui.film.clips.renderer.UIClipRenderers;
 import mchorse.bbs_mod.ui.film.markers.UIMarkerOverlayPanel;
 import mchorse.bbs_mod.ui.film.markers.UIMarkersController;
+import mchorse.bbs_mod.ui.film.utils.CameraRigGenerator;
 import mchorse.bbs_mod.ui.film.utils.TracksideGenerator;
+import mchorse.bbs_mod.ui.film.utils.UICameraRigOverlayPanel;
 import mchorse.bbs_mod.ui.film.utils.UITracksideOverlayPanel;
 import mchorse.bbs_mod.ui.framework.UIContext;
 import mchorse.bbs_mod.ui.framework.elements.UIElement;
@@ -53,6 +55,7 @@ import mchorse.bbs_mod.utils.colors.Colors;
 import mchorse.bbs_mod.utils.factory.IFactory;
 import mchorse.bbs_mod.utils.keyframes.Keyframe;
 import mchorse.bbs_mod.utils.presets.PresetManager;
+import org.joml.Vector2i;
 import org.joml.Vector3i;
 import org.lwjgl.glfw.GLFW;
 
@@ -270,7 +273,7 @@ public class UIClips extends UITimelineCanvas
             if (this.factory.getKeys().contains(Link.bbs("keyframe")))
             {
                 add.action(Icons.EDITOR, UIKeys.CAMERA_TIMELINE_CONTEXT_FROM_PLAYER_RECORDING, () -> this.fromReplay(mouseX, mouseY));
-                add.action(Icons.CAMERA, UIKeys.CAMERA_TIMELINE_CONTEXT_TRACKSIDE, () -> this.trackside(mouseY));
+                add.action(Icons.CAMERA, UIKeys.CAMERA_TIMELINE_CONTEXT_RIG, () -> this.cameraRig(mouseY));
             }
         });
     }
@@ -653,6 +656,60 @@ public class UIClips extends UITimelineCanvas
                         panel.getController().trackside.open(replay, settings, (idles) -> this.addTrackside(replay, layer, idles));
                     }), 240, 300);
                 });
+            }
+        });
+    }
+
+    /**
+     * Pick a rig (or trackside cameras) and a replay, then the settings, and
+     * preview it in the viewport before adding the baked keyframe clip.
+     */
+    private void cameraRig(int mouseY)
+    {
+        UIFilmPanel panel = this.getParent(UIFilmPanel.class);
+        int layer = Math.max(this.fromLayerY(mouseY), 0);
+        IKey[] titles = {UIKeys.CAMERA_RIG_ORBIT, UIKeys.CAMERA_RIG_CRANE, UIKeys.CAMERA_RIG_FOLLOW};
+
+        if (panel == null)
+        {
+            return;
+        }
+
+        Film film = panel.getData();
+
+        this.getContext().replaceContextMenu((rigs) ->
+        {
+            rigs.action(Icons.CAMERA, UIKeys.CAMERA_TRACKSIDE_TITLE, () ->
+            {
+                panel.getController().rig.close();
+                this.trackside(mouseY);
+            });
+
+            for (CameraRigGenerator.Rig rig : CameraRigGenerator.Rig.values())
+            {
+                IKey title = titles[rig.ordinal()];
+
+                rigs.action(Icons.CAMERA, title, () -> this.getContext().replaceContextMenu((menu) ->
+                {
+                    for (Replay replay : film.replays.getList())
+                    {
+                        menu.action(Icons.EDITOR, IKey.raw(replay.getName()), () ->
+                        {
+                            int cursor = this.delegate.getCursor();
+                            int length = Math.max((int) replay.getLastKeyframeTick() - cursor, 1);
+
+                            UIOverlay.addOverlay(this.getContext(), new UICameraRigOverlayPanel(rig, title, cursor, length, (settings) ->
+                            {
+                                panel.getController().trackside.close();
+                                panel.getController().rig.open(replay, title, settings, (clip) ->
+                                {
+                                    this.clearSelection();
+                                    this.addClip(clip, clip.tick.get(), layer, clip.duration.get());
+                                });
+                            }), 240, 260);
+                        });
+                    }
+                }));
             }
         });
     }
@@ -1196,6 +1253,14 @@ public class UIClips extends UITimelineCanvas
         else
         {
             menu.action(Icons.EDIT, UIKeys.FILM_MARKERS_EDIT, () -> this.editMarker(marker));
+
+            if (marker.duration.get() > 0 && this.delegate instanceof UIClipsPanel panel)
+            {
+                int start = marker.tick.get();
+                Vector2i range = new Vector2i(start, start + marker.duration.get());
+
+                menu.action(Icons.VIDEO_CAMERA, UIKeys.FILM_MARKERS_EXPORT, () -> panel.filmPanel.preview.exportVideo(range));
+            }
             menu.action(Icons.REMOVE, UIKeys.FILM_MARKERS_REMOVE, () -> markers.remove(marker));
         }
 

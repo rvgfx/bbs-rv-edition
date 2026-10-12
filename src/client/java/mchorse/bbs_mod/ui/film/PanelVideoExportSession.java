@@ -30,6 +30,8 @@ public class PanelVideoExportSession extends VideoExportSession
     private final UIFilmPanel editor;
 
     private int duration;
+    /** Explicit tick range (e.g. a marker's) that wins over the loop, or null. */
+    private Vector2i range;
     private int end;
     private boolean restorePaused;
     /** Last cursor tick sent to a remote server's action player, or -1 if none yet. */
@@ -43,7 +45,13 @@ public class PanelVideoExportSession extends VideoExportSession
 
     public boolean start(int duration, int textureId, int width, int height)
     {
+        return this.start(duration, null, textureId, width, height);
+    }
+
+    public boolean start(int duration, Vector2i range, int textureId, int width, int height)
+    {
         this.duration = duration;
+        this.range = range;
 
         long delayMs = (long) (Math.max(0F, BBSSettings.videoDelay.get()) * 1000F);
 
@@ -62,7 +70,8 @@ public class PanelVideoExportSession extends VideoExportSession
 
                 String name = StringUtils.createTimestampFilename() + ".wav";
                 File file = new File(BBSRendering.getVideoFolder(), name);
-                Vector2i range = BBSSettings.editorLoop.get() ? this.editor.getLoopingRange() : new Vector2i();
+                Vector2i range = this.range != null ? this.range
+                    : BBSSettings.editorLoop.get() ? this.editor.getLoopingRange() : new Vector2i();
 
                 if (AudioRenderer.renderAudio(file, audioClips, camera.calculateDuration(), 48000, TimeUtils.toSeconds(range.x), TimeUtils.toSeconds(range.y)))
                 {
@@ -84,9 +93,17 @@ public class PanelVideoExportSession extends VideoExportSession
         int max = this.editor.cameraEditor.clips.loopMax;
         boolean looping = BBSSettings.editorLoop.get();
 
-        this.end = looping && min != max ? Math.max(min, max) : this.duration;
+        if (this.range != null)
+        {
+            this.end = this.range.y;
+            this.editor.setCursor(this.range.x);
+        }
+        else
+        {
+            this.end = looping && min != max ? Math.max(min, max) : this.duration;
+            this.editor.setCursor(looping ? Math.min(min, max) : 0);
+        }
 
-        this.editor.setCursor(looping ? Math.min(min, max) : 0);
         this.editor.notifyServer(ActionState.RESTART);
 
         if (this.ui.resetReplays)

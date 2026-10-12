@@ -647,6 +647,16 @@ public class BBSModClient implements ClientModInitializer
             IKey.constant("Intel (QSV)")
         );
 
+        BBSSettings.editorAspectGuide.modes(
+            UIKeys.GENERAL_NONE,
+            IKey.constant("2.39:1"),
+            IKey.constant("2:1"),
+            IKey.constant("1.85:1"),
+            IKey.constant("4:3"),
+            IKey.constant("1:1"),
+            IKey.constant("9:16")
+        );
+
         BBSSettings.rotate3dSphereMode.modes(
             UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_TRACKBALL,
             UIKeys.ENGINE_ROTATE_3D_SPHERE_MODE_ARCBALL

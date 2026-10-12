@@ -4,6 +4,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
 import mchorse.bbs_mod.camera.clips.screen.ColorClip;
 import mchorse.bbs_mod.camera.clips.screen.ColorEffect;
+import mchorse.bbs_mod.camera.clips.screen.DepthOfFieldClip;
+import mchorse.bbs_mod.camera.clips.screen.DepthOfFieldEffect;
 import mchorse.bbs_mod.camera.clips.screen.GrainClip;
 import mchorse.bbs_mod.camera.clips.screen.GrainEffect;
 import mchorse.bbs_mod.ui.framework.elements.utils.Batcher2D;
@@ -26,8 +28,9 @@ public class ScreenEffectRenderer
     {
         List<ColorEffect> effects = ColorClip.getEffects(context);
         List<GrainEffect> grains = GrainClip.getEffects(context);
+        List<DepthOfFieldEffect> dof = DepthOfFieldClip.getEffects(context);
 
-        if (effects.isEmpty() && grains.isEmpty())
+        if (effects.isEmpty() && grains.isEmpty() && dof.isEmpty())
         {
             return;
         }
@@ -35,6 +38,14 @@ public class ScreenEffectRenderer
         List<ColorEffect> pending = new ArrayList<>();
 
         RenderSystem.disableDepthTest();
+
+        /* The lens blurs before anything is graded, so it goes first */
+        if (!dof.isEmpty())
+        {
+            batcher.flush();
+            DepthOfFieldRenderer.apply(dof);
+            ColorGradeRenderer.resyncMinecraftState(batcher);
+        }
 
         for (ColorEffect effect : effects)
         {
