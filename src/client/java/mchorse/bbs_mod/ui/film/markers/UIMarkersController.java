@@ -41,6 +41,8 @@ public class UIMarkersController
 
     private FilmMarker dragged;
     private int dragTick;
+    /** Whether the drag moves the end of the duration band rather than the marker itself. */
+    private boolean draggingEnd;
 
     public UIMarkersController(Supplier<FilmMarkers> markers)
     {
@@ -75,6 +77,18 @@ public class UIMarkersController
         this.dragTick = marker.tick.get();
     }
 
+    public boolean isDraggingEnd()
+    {
+        return this.draggingEnd;
+    }
+
+    public void beginDragEnd(FilmMarker marker)
+    {
+        this.dragged = marker;
+        this.dragTick = marker.tick.get() + marker.duration.get();
+        this.draggingEnd = true;
+    }
+
     public void dragTo(int tick)
     {
         this.dragTick = Math.max(0, tick);
@@ -83,6 +97,7 @@ public class UIMarkersController
     public void stopDrag()
     {
         this.dragged = null;
+        this.draggingEnd = false;
     }
 
     /**
@@ -92,7 +107,15 @@ public class UIMarkersController
      */
     public int getDisplayTick(FilmMarker marker)
     {
-        return marker == this.dragged ? this.dragTick : marker.tick.get();
+        return marker == this.dragged && !this.draggingEnd ? this.dragTick : marker.tick.get();
+    }
+
+    /**
+     * Same as {@link #getDisplayTick(FilmMarker)}, but for the duration while its end is dragged.
+     */
+    public int getDisplayDuration(FilmMarker marker)
+    {
+        return marker == this.dragged && this.draggingEnd ? Math.max(0, this.dragTick - marker.tick.get()) : marker.duration.get();
     }
 
     /* Hit testing */
@@ -138,6 +161,44 @@ public class UIMarkersController
         return closest;
     }
 
+    /**
+     * @return The marker whose duration end line is under the mouse, or {@code null}. Callers check
+     * {@link #getMarkerAt} first, so a marker's own line always wins over another one's end.
+     */
+    public FilmMarker getMarkerEndAt(Area area, Scale scale, int mouseX, int mouseY, int clipOffset)
+    {
+        FilmMarkers markers = this.getMarkers();
+
+        if (markers == null || !this.isInRuler(area, mouseX, mouseY))
+        {
+            return null;
+        }
+
+        FilmMarker closest = null;
+        int closestDistance = HIT_DISTANCE + 1;
+
+        for (FilmMarker marker : markers.getList())
+        {
+            int duration = this.getDisplayDuration(marker);
+
+            if (duration <= 0)
+            {
+                continue;
+            }
+
+            int x = (int) scale.to(this.getDisplayTick(marker) + duration - clipOffset);
+            int distance = Math.abs(mouseX - x);
+
+            if (distance <= HIT_DISTANCE && distance < closestDistance)
+            {
+                closest = marker;
+                closestDistance = distance;
+            }
+        }
+
+        return closest;
+    }
+
     /* Rendering */
 
     public void render(UIContext context, Area area, Scale scale, int clipOffset)
@@ -167,6 +228,17 @@ public class UIMarkersController
         {
             FilmMarker marker = sorted.get(i);
             int x = (int) scale.to(this.getDisplayTick(marker) - clipOffset);
+            int color = marker.color.get() & Colors.RGB;
+            int duration = this.getDisplayDuration(marker);
+
+            /* Drawn before the visibility skip: the band can be on screen while its head is not */
+            if (duration > 0)
+            {
+                int x2 = (int) scale.to(this.getDisplayTick(marker) + duration - clipOffset);
+
+                context.batcher.box(x, area.y, x2, rulerBottom, Colors.setA(color, 0.2F));
+                context.batcher.box(x2, area.y, x2 + 1, lineBottom, Colors.setA(color, 0.75F));
+            }
 
             if (x < area.x - PIN_WIDTH || x > area.ex())
             {
@@ -174,7 +246,6 @@ public class UIMarkersController
             }
 
             boolean active = marker == hovered || marker == this.dragged;
-            int color = marker.color.get() & Colors.RGB;
 
             context.batcher.box(x, area.y, x + LINE_WIDTH, lineBottom, Colors.setA(color, active ? 1F : 0.85F));
             context.batcher.box(x, area.y, x + PIN_WIDTH, area.y + PIN_HEIGHT, color | Colors.A100);

@@ -17,6 +17,8 @@ public class FilmMarker extends ValueGroup
     public static final int DEFAULT_COLOR = 0xffcc44;
 
     public final ValueInt tick = new ValueInt("tick", 0, 0, Integer.MAX_VALUE);
+    /** Length in ticks, drawn as a band on the ruler; 0 is a plain point marker. */
+    public final ValueInt duration = new ValueInt("duration", 0, 0, Integer.MAX_VALUE);
     public final ValueString title = new ValueString("title", "");
     /** RGB without alpha, like every other authored colour in the tree. */
     public final ValueInt color = new ValueInt("color", DEFAULT_COLOR).color();
@@ -26,6 +28,7 @@ public class FilmMarker extends ValueGroup
         super(id);
 
         this.add(this.tick);
+        this.add(this.duration);
         this.add(this.title);
         this.add(this.color);
     }
